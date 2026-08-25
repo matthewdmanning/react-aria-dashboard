@@ -1,0 +1,10 @@
+main {
+  color: var(--dashboard-color);
+  background: var(--dashboard-background);
+}
+
+[data-semantic-role] {
+  color: var(--semantic-color);
+  font-family: var(--semantic-font-family);
+  font-weight: var(--semantic-font-weight);
+}
