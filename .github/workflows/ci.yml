@@ -31,14 +31,5 @@ jobs:
       - name: Check Markdown formatting
         run: npx --yes prettier@3.6.2 --check "**/*.md"
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build application
-        run: npm run build
-
-      - name: Run end-to-end tests
-        run: npm run test:e2e
+      - name: Check code quality
+        run: npm run check
