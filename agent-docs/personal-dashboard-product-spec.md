@@ -161,4 +161,3 @@ The existing template currently validates JSON before applying it to in-memory d
 - Arbitrary executable custom panel code.
 - A database.
 - Cloud infrastructure and provisioning.
-
