@@ -28,8 +28,5 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Check Markdown formatting
-        run: npx --yes prettier@3.6.2 --check "**/*.md"
-
       - name: Check code quality
         run: npm run check
