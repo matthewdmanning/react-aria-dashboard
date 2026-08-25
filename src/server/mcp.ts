@@ -335,6 +335,6 @@ export function createDashboardMcpServer(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void serveStdio(createDashboardMcpServer);
+  void serveStdio(() => createDashboardMcpServer());
   console.error("Personal Dashboard MCP server running on stdio");
 }
