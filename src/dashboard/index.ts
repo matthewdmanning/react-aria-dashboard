@@ -29,7 +29,7 @@ export function renderComponent<T>(
     throw new Error(`Invalid component data: ${ajv.errorsText(validate.errors)}`);
   }
 
-  return createElement(definition.Component, { data });
+  return createElement(definition.Component, { data: data as T });
 }
 
 type ThemeTreatment = Record<string, string | number>;
@@ -68,7 +68,7 @@ function SemanticField({
 }: {
   as: "p" | "h2" | "td" | "span";
   field: string;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return createElement(as, useSemanticRole(field), children);
 }
