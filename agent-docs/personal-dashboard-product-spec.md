@@ -131,9 +131,11 @@ These capabilities may be built sequentially. Each capability must be tested and
 
 The current static HTML dashboard and its JSON input are reference material for the new product, not the product scope itself:
 
-- [Current HTML reference](C:\Users\mattm\Documents\Codex\2026-08-20\referenced-chatgpt-conversation-this-is-an\outputs\job-search-progress.html)
-- [Current JSON reference](C:\Users\mattm\Documents\Codex\2026-08-20\referenced-chatgpt-conversation-this-is-an\outputs\study-plans.json)
-- [Interface prototype](C:\Users\mattm\Documents\Codex\2026-08-22\new-chat\outputs\personal-dashboard.html)
+Set `DASHBOARD_REFERENCE_DIR` to the directory containing the current references and `DASHBOARD_PROTOTYPE_DIR` to the directory containing the prototype.
+
+- Current HTML reference: `${DASHBOARD_REFERENCE_DIR}/job-search-progress.html`
+- Current JSON reference: `${DASHBOARD_REFERENCE_DIR}/study-plans.json`
+- Interface prototype: `${DASHBOARD_PROTOTYPE_DIR}/personal-dashboard.html`
 
 The existing template currently validates JSON before applying it to in-memory dashboard state. Its study-plan, calendar, and focus data shapes are specific to that template. The new product must support user-defined record schemas, shared record collections, and configurable panel views; no replacement JSON structure has been decided in this specification.
 
