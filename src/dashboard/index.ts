@@ -57,10 +57,33 @@ export type DashboardConfiguration = z.infer<
   typeof dashboardConfigurationSchema
 >;
 
+export const defaultDashboardConfiguration: DashboardConfiguration = {
+  version: 1,
+  integrations: [],
+  theme: "calm",
+  fontScale: 1,
+  agentPermissions: {
+    configuration: "read",
+    artifacts: "none",
+    data: "none",
+  },
+  panels: [{ id: "welcome", title: "Dashboard", definition: "message" }],
+  wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
+  arrangement: ["welcome"],
+};
+
 export function parseDashboardConfiguration(
   candidate: unknown,
 ): DashboardConfiguration {
   const configuration = dashboardConfigurationSchema.parse(candidate);
+  const credentialKey = /credential|password|secret|token|api.?key|access.?key/i;
+  if (
+    configuration.integrations.some(({ settings }) =>
+      Object.keys(settings).some((key) => credentialKey.test(key)),
+    )
+  ) {
+    throw new Error("Invalid dashboard configuration: integration credentials are not allowed");
+  }
   const panelIds = new Set(configuration.panels.map(({ id }) => id));
   const wiredIds = new Set(configuration.wiring.map(({ panelId }) => panelId));
   const arrangedIds = new Set(configuration.arrangement);

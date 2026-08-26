@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx src/server/index.ts",
     "build": "tsc --noEmit && vite build",
     "mcp": "tsx src/server/mcp.ts",
     "check": "npm run format:check && npm run typecheck && npm test && npm run build && npm run test:e2e",
