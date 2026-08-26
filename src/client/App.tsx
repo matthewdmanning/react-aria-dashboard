@@ -6,7 +6,7 @@ import {
   saveDashboardConfiguration,
 } from "./dashboard-configuration-client";
 import { formatMessage } from "./formatters/message";
-import { messagePanel } from "./panels/message";
+import { includedPanelDefinitions } from "./panels";
 import { saveDashboardSettings, Settings } from "./Settings";
 
 export function App() {
@@ -22,7 +22,7 @@ export function App() {
   return (
     <>
       {renderDashboard(configuration, {
-        panelDefinitions: { message: messagePanel },
+        panelDefinitions: includedPanelDefinitions,
         sources: { welcome: { text: "Dashboard architecture is ready." } },
         formatters: { message: formatMessage },
       })}
