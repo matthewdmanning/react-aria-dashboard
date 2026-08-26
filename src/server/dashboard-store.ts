@@ -4,35 +4,26 @@ import { dirname } from "node:path";
 import {
   parseDashboardConfiguration,
   type DashboardConfiguration,
-} from "../dashboard/index";
+} from "../dashboard";
 
-export async function readDashboard(
+export async function readDashboardConfiguration(
   path: string,
 ): Promise<DashboardConfiguration> {
   return parseDashboardConfiguration(JSON.parse(await readFile(path, "utf8")));
 }
 
-export async function replaceDashboard(
+export async function replaceDashboardConfiguration(
   path: string,
   candidate: unknown,
 ): Promise<void> {
-  let serialized: string | undefined;
-
-  try {
-    serialized = JSON.stringify(candidate);
-  } catch {
-    throw new Error("Invalid dashboard configuration: value must be JSON");
-  }
+  const serialized = JSON.stringify(candidate);
   if (serialized === undefined) {
     throw new Error("Invalid dashboard configuration: value must be JSON");
   }
-  const configuration: DashboardConfiguration = parseDashboardConfiguration(
-    JSON.parse(serialized),
-  );
 
-  await mkdir(dirname(path), { recursive: true });
-  // ponytail: serialized writes use one temp file; add locking if concurrent writers arrive.
+  const configuration = parseDashboardConfiguration(JSON.parse(serialized));
   const temporaryPath = `${path}.tmp`;
+  await mkdir(dirname(path), { recursive: true });
 
   try {
     await writeFile(temporaryPath, `${JSON.stringify(configuration, null, 2)}\n`);
@@ -41,21 +32,4 @@ export async function replaceDashboard(
     await unlink(temporaryPath).catch(() => undefined);
     throw error;
   }
-}
-
-export async function updateDashboardDataSource(
-  path: string,
-  id: string,
-  data: unknown,
-): Promise<void> {
-  const configuration = await readDashboard(path);
-  if (!configuration.dataSources.some((source) => source.id === id)) {
-    throw new Error(`Data source not found: ${id}`);
-  }
-  await replaceDashboard(path, {
-    ...configuration,
-    dataSources: configuration.dataSources.map((source) =>
-      source.id === id ? { ...source, data } : source,
-    ),
-  });
 }
