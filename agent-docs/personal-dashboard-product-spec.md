@@ -1,12 +1,14 @@
-# Personal Dashboard — Product Specification
+# Dashboard — Product Specification
 
 ## Status
 
 Draft product specification based only on the decisions recorded in this conversation. Items without a decision are explicitly marked **Open**.
 
+Architecture statements in this specification defer to [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+
 ## Product
 
-A general personal dashboard for viewing and managing the user's chosen information and actions. It is not limited to job searches, study plans, or any other specific task domain.
+A general dashboard for viewing and managing the user's chosen information and actions. It is not limited to job searches, study plans, or any other specific task domain.
 
 The product is a one-page local web app whose application package is ready to run in a deployment environment. It does not have a separate landing or focus page. Building or provisioning cloud infrastructure is out of scope.
 
@@ -29,15 +31,17 @@ The implementation is not constrained to a single static HTML file. A broader we
 - Keep content available as a local JSON file, so local AI tools can use it as context.
 - Allow optional connections to external services and optional cloud storage.
 - Support included and third-party themes.
-- Allow the creation of custom panels backed by shared record collections and user-defined record schemas.
+- Allow agents to create or change panels, their UIs, JSON Schemas, formatter code, data wiring, and arrangement in response to user prompts.
 - Allow interaction with AI agents through dashboard state-management tools, including an MCP interface.
 
 ## First-release completion boundary
 
 The first release is not complete until it includes all of the following:
 
-- Local persistence through the backend and canonical JSON file.
-- Custom panels using the built-in display types.
+- Local persistence through the backend.
+- Agent-created or agent-changed panels composed of a UI and JSON Schema.
+- Persistent dashboard configuration for integrations, the selected UI theme, font scaling, agent permissions, panels, wiring, and arrangement.
+- A Settings interface for directly managing integrations, themes, font scaling, and agent permissions without an agent.
 - Agent interaction governed by permissions configured in Settings.
 - Agentic tools, including an MCP interface, for inspecting and updating dashboard state.
 - A pull-only Google Calendar integration with locally retained data.
@@ -46,15 +50,14 @@ The first release is not complete until it includes all of the following:
 - A deployment-ready application package that does not require cloud infrastructure or provisioning work to be part of this product.
 - Authentication when the dashboard is externally accessible; local-only access does not require authentication.
 
-These capabilities may be built sequentially. Each capability must be tested and previewed before work proceeds to the next build stage.
+These capabilities may be built sequentially.
 
 ## Local data and backend
 
-- The local JSON file is the persisted source of dashboard content and settings.
+- Dashboard content and settings persist locally.
 - A database is out of scope because the product is too small to need one.
-- The backend updates the local JSON file when the user approves changes.
 - The dashboard remains usable from its locally persisted state when external services or network access are unavailable.
-- The local JSON file remains directly usable as context for local AI tools.
+- Locally persisted dashboard data remains directly usable as context for local AI tools.
 
 ## Access security
 
@@ -62,19 +65,30 @@ These capabilities may be built sequentially. Each capability must be tested and
 - The dashboard must require authentication when it is externally accessible.
 - The exact authentication mechanism and external-access configuration remain open.
 
-## Panels, record collections, and schemas
+## Dashboard configuration and Settings
 
-- The existing dashboard panel design is visual and interaction inspiration only; it is not the product's permanent domain model.
-- Records exist in collections independently of panels.
-- Each record collection uses a user-defined record schema.
-- Users configure a record schema's fields and field types to model the tasks and information important to them.
-- A record schema may assign fields the semantic roles impact, deadline or urgency, and status or completion while retaining user-defined field names.
-- A panel is a configured view of a record collection, and multiple panels may present the same records through different built-in display types.
-- Editing a shared record updates every panel that presents it.
-- Built-in display types and themes use semantic roles consistently for emphasis, sorting, filtering, and clutter reduction.
-- First-release custom panels are limited to built-in display types.
-- The built-in display types are: list, table, cards, calendar, checklist, and chart.
-- Arbitrary custom HTML or JavaScript supplied through a schema or panel configuration is not specified for the first release.
+- Dashboard configuration persistently records integrations, the selected UI theme, font scaling, agent permissions, panels, panel wiring, and panel arrangement.
+- Dashboard configuration does not define one universal structure for panel data, relationships, UI code, JSON Schemas, or formatter code.
+- Settings is the sole interface for adding, changing, and removing external-service integrations.
+- Settings is the sole interface for adding, changing, removing, and selecting themes.
+- Settings is the sole interface for changing font scaling.
+- Settings is the interface for changing agent permissions.
+- Settings does not create or edit panels, formatter code, panel wiring, or panel arrangement.
+- Settings changes persist through the dashboard-configuration persistence interface.
+- Credentials and tokens are not stored in dashboard data.
+- Whether Settings may change authentication configuration remains open.
+
+## Panels and data wiring
+
+- A dashboard specifies the arrangement or ordering of panels on a page or display.
+- A panel is an independent unit composed of a UI and a JSON Schema.
+- The UI can render any properly formatted data that fits the panel's JSON Schema.
+- A panel only displays properly formatted data.
+- Formatter code is separate from the panel, even when only one panel uses it.
+- A formatter may extract or reformat source data, including removing fields that the panel does not need.
+- The agent creates and maintains the wiring between source data, formatter code, the panel's JSON Schema, and the panel UI.
+- The agent is responsible for ensuring the formatted data fits the schema and that the UI can render it.
+- Project-level validation or preview of formatter output is out of scope.
 
 ## Agent interaction
 
@@ -82,8 +96,8 @@ These capabilities may be built sequentially. Each capability must be tested and
 - The project includes agentic tools for inspecting and updating dashboard state.
 - The agentic tool surface includes an MCP interface.
 - Agent access to dashboard state is governed by permissions configured in Settings.
-- An agent session may be multi-step: the agent can ask follow-up questions before proposing a panel or content change.
-- Agent-driven customization is constrained to first-release built-in display types.
+- An agent session may be multi-step: the agent can ask follow-up questions before changing the dashboard.
+- In response to user prompts, an agent may change any or all parts of the dashboard.
 - Any agent action that changes a connected third-party service requires explicit user approval before it is applied.
 - Local AI tools are supported as an intended use case; cloud AI is optional.
 
@@ -94,7 +108,7 @@ These capabilities may be built sequentially. Each capability must be tested and
 - Prioritization and focus are core product outcomes, not presentation-only enhancements.
 - The dashboard is one page; prioritization happens within the dashboard rather than on a separate landing or focus page.
 - Default components, included themes, and dashboard functionality must provide ways to emphasize high-impact items and reduce visual clutter.
-- Custom panels and themes must be able to preserve a clear distinction between important items and supporting information.
+- Panels and themes must be able to preserve a clear distinction between important items and supporting information.
 - The primary interaction modes are tablet touch and mouse input.
 - Interactive targets, gestures, menus, selection, reordering, and editing must work with both touch and mouse.
 - Keyboard and assistive-technology access remain required accessibility basics.
@@ -111,16 +125,17 @@ These capabilities may be built sequentially. Each capability must be tested and
 ## Themes
 
 - Included and third-party themes are supported.
-- Themes are declarative UI packages made from design tokens and approved component and emphasis variants.
-- Themes may change color, typography, spacing, density, and high-impact treatments.
-- Themes cannot execute code, access dashboard data, or alter prioritization behavior.
+- A UI theme is a set of presentational settings applied to UI components.
+- Theme settings may specify color, typography, spacing, density, and high-impact treatments.
+- A theme does not own or control dashboard presentation or behavior.
+- Theme settings cannot execute code, access dashboard data, or alter prioritization behavior.
 - Installed themes are stored locally and work offline after installation.
 - An online catalog may be used to discover and install additional themes.
 
 ## Optional cloud backup and restore
 
 - The app may back up both settings and content to optional cloud storage and restore them later.
-- The local JSON file remains the source of truth and the dashboard does not require a cloud backup to operate.
+- The dashboard does not require a cloud backup to operate.
 - The cloud backup target is user-defined rather than a fixed repository or provider.
 - Google Drive is the first cloud storage target.
 - Dropbox and other storage targets are planned for a later release.
@@ -137,19 +152,19 @@ Set `DASHBOARD_REFERENCE_DIR` to the directory containing the current references
 - Current JSON reference: `${DASHBOARD_REFERENCE_DIR}/study-plans.json`
 - Interface prototype: `${DASHBOARD_PROTOTYPE_DIR}/personal-dashboard.html`
 
-The existing template currently validates JSON before applying it to in-memory dashboard state. Its study-plan, calendar, and focus data shapes are specific to that template. The new product must support user-defined record schemas, shared record collections, and configurable panel views; no replacement JSON structure has been decided in this specification.
+The existing template's study-plan, calendar, and focus data shapes are specific to that template and do not constrain the product architecture.
 
 ## Open decisions
 
 - The exact local backend implementation and API.
-- The exact canonical JSON structure for record schemas, record collections, panel configuration, settings, and backup metadata.
-- The supported field-type catalog, validation rules, and display-type compatibility rules.
+- The persistence structure for dashboard data, settings, and backup metadata.
 - The exact value models and precedence rules for impact, urgency, and completion.
 - The encryption method, key ownership, recovery, and decryption behavior for cloud copies.
 - Google Drive authorization and sync behavior.
 - Cloud backup creation, retention, restoration, and overwrite behavior.
 - The MCP tool contract, transport, lifecycle, and detailed permission categories.
 - The authentication mechanism and external-access configuration.
+- Whether Settings may change authentication configuration.
 - Deployment packaging, runtime configuration, and production-readiness acceptance criteria.
 - Third-party theme discovery, review, installation, and removal behavior.
 - The detailed interface and accessibility requirements beyond the prototype.
@@ -158,6 +173,5 @@ The existing template currently validates JSON before applying it to in-memory d
 
 - Dropbox and other cloud storage integrations.
 - External-service write-back.
-- Arbitrary executable custom panel code.
 - A database.
 - Cloud infrastructure and provisioning.

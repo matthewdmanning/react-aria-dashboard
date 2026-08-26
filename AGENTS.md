@@ -9,14 +9,30 @@ This is a single-package, single-process TypeScript repository.
 - `src/server/` owns persistence, authentication, MCP tools, and external integrations.
 - Keep focused tests beside their modules; use `tests/` for whole-app behavior.
 - `examples/dashboard.json` is sample data, never the runtime source of truth.
+- `ARCHITECTURE.md` is the authoritative architecture document and supersedes conflicting architecture statements elsewhere.
 - `CONTEXT.md` defines domain vocabulary; `agent-docs/` holds the product specification.
 - Runtime dashboard data and installed themes belong at a configurable path outside `src/`.
 
 Keep the dashboard general-purpose. Job-search and study data are examples, not permanent domain concepts.
 
+## Documentation Authority
+
+Before coding, read the active checkout's `ARCHITECTURE.md`, `CONTEXT.md`, `AGENTS.md`, and relevant current product specification. Use the latest active documentation even when issues, comments, audits, old branches, memory, examples, tests, or implementation disagree. Stop and correct active documentation before coding if authoritative documents conflict.
+
+Never derive current requirements from material marked legacy, quarantined, superseded, archived, or backup. Quarantined material is historical evidence only.
+
+For dependency and framework guidance, use current Context7 documentation before web search. If Context7 does not contain the needed documentation, record that limitation before using a web source.
+
 ## Build, Test, and Development Commands
 
-The repository is structurally scaffolded, but dependencies and package scripts are intentionally not configured yet. Add commands here only when matching scripts exist in `package.json`.
+- `npm run dev` starts Vite for local development.
+- `npm run build` typechecks and builds the application.
+- `npm run typecheck` runs TypeScript without emitting files.
+- `npm test` runs the automated test suite.
+- `npm run test:e2e` runs the Playwright checks.
+- `npm run mcp` starts the dashboard MCP server.
+
+Only document commands that have matching scripts in `package.json`.
 
 ## Coding Style & Naming Conventions
 
@@ -26,7 +42,11 @@ No formatter or linter is configured yet. Add tool-specific rules here only afte
 
 ## Testing Guidelines
 
-No testing framework or coverage threshold is established. New non-trivial behavior should include the smallest automated check that proves it works. Name colocated tests `*.test.ts` or `*.test.tsx`; reserve `tests/app.test.ts` for whole-app behavior.
+When coding a section governed by a contract, write its contract tests before implementing that section. Cover the interface functions and behaviors promised by the contract, then implement code that passes those tests and accomplishes the stated purpose.
+
+Every test must be load-bearing and represent a likely real use. Do not add tests for errors that would already necessarily fail through the runtime, compiler, or existing caller path. Code without a contract is not subject to a blanket test-first rule.
+
+Name focused colocated tests `*.test.ts` or `*.test.tsx`; reserve `tests/app.test.ts` for whole-app behavior.
 
 ## Commit & Pull Request Guidelines
 
@@ -36,7 +56,7 @@ Pull requests should explain the user-visible change, link the relevant GitHub i
 
 ## Security & Configuration
 
-Never commit credentials, tokens, local dashboard data, or unencrypted cloud-backup contents. Keep the canonical JSON file local unless a documented example fixture contains no personal data.
+Never commit credentials, tokens, local dashboard data, sensitive field names or values, or unencrypted cloud-backup contents. Example fixtures must contain no personal or sensitive data.
 
 ## Agent skills
 
