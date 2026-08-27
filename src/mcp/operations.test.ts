@@ -79,10 +79,14 @@ describe("dashboard MCP operations contract", () => {
       expect(url).toContain("team");
       return Response.json({ items: [{ id: "event-1" }] });
     };
-    const operations = createDashboardOperations(workspace, {
-      tokenProvider: async () => "access-token",
-      fetch: fetchCalendar,
-    }, { configurationPath, calendarDataPath: dataPath });
+    const operations = createDashboardOperations(
+      workspace,
+      {
+        tokenProvider: async () => "access-token",
+        fetch: fetchCalendar,
+      },
+      { configurationPath, calendarDataPath: dataPath },
+    );
 
     await expect(operations.refreshSource("team-calendar")).resolves.toEqual({
       items: [{ id: "event-1" }],
