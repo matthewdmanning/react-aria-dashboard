@@ -134,14 +134,18 @@ describe("dashboard MCP operations contract", () => {
       title: "Weather",
       preview: true,
     });
-    await expect(readFile(join(workspace, "panels", "weather-panel", "panel.json"))).rejects.toThrow();
+    await expect(
+      readFile(join(workspace, "panels", "weather-panel", "panel.json")),
+    ).rejects.toThrow();
 
     await operations.applyPanelPackage(files);
     await expect(
       readFile(join(workspace, "panels", "weather-panel", "panel.tsx"), "utf8"),
     ).resolves.toBe(files.component);
     await expect(
-      readFile(configurationPath, "utf8").then((contents) => JSON.parse(contents)),
+      readFile(configurationPath, "utf8").then((contents) =>
+        JSON.parse(contents),
+      ),
     ).resolves.toMatchObject({
       panels: [{ id: "welcome" }, { id: "weather-panel" }],
       wiring: [{ panelId: "welcome" }, { panelId: "weather-panel" }],

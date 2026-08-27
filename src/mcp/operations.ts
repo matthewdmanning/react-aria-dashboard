@@ -148,12 +148,17 @@ export function createDashboardOperations(
         previousPackage = `${packageRoot}.${process.pid}.bak`;
         await rename(packageRoot, previousPackage).catch(() => undefined);
         await rename(temporaryRoot, packageRoot);
-        await replaceDashboardConfiguration(configurationPath, panelConfiguration);
-        if (previousPackage) await rm(previousPackage, { recursive: true, force: true });
+        await replaceDashboardConfiguration(
+          configurationPath,
+          panelConfiguration,
+        );
+        if (previousPackage)
+          await rm(previousPackage, { recursive: true, force: true });
       } catch (error) {
         await rm(temporaryRoot, { recursive: true, force: true });
         await rm(packageRoot, { recursive: true, force: true });
-        if (previousPackage) await rename(previousPackage, packageRoot).catch(() => undefined);
+        if (previousPackage)
+          await rename(previousPackage, packageRoot).catch(() => undefined);
         throw error;
       }
     },
