@@ -100,4 +100,51 @@ describe("dashboard MCP operations contract", () => {
       "permission",
     );
   });
+
+  test("previews and then applies an approved panel package", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "panel-mcp-"));
+    const configurationPath = join(workspace, "dashboard.json");
+    await replaceDashboardConfiguration(configurationPath, {
+      ...defaultDashboardConfiguration,
+      agentPermissions: {
+        configuration: "write",
+        artifacts: "write",
+        data: "none",
+      },
+    });
+    const operations = createDashboardOperations(workspace);
+    const files = {
+      manifest: {
+        id: "weather-panel",
+        title: "Weather",
+        schema: "schema.json",
+        component: "panel.tsx",
+        sources: ["weather"],
+      },
+      schema: JSON.stringify({
+        type: "object",
+        properties: { temperature: { type: "number" } },
+        required: ["temperature"],
+      }),
+      component: "export function Panel({ data }) { return data.temperature; }",
+    };
+
+    await expect(operations.previewPanelPackage(files)).resolves.toEqual({
+      id: "weather-panel",
+      title: "Weather",
+      preview: true,
+    });
+    await expect(readFile(join(workspace, "panels", "weather-panel", "panel.json"))).rejects.toThrow();
+
+    await operations.applyPanelPackage(files);
+    await expect(
+      readFile(join(workspace, "panels", "weather-panel", "panel.tsx"), "utf8"),
+    ).resolves.toBe(files.component);
+    await expect(
+      readFile(configurationPath, "utf8").then((contents) => JSON.parse(contents)),
+    ).resolves.toMatchObject({
+      panels: [{ id: "welcome" }, { id: "weather-panel" }],
+      wiring: [{ panelId: "welcome" }, { panelId: "weather-panel" }],
+    });
+  });
 });

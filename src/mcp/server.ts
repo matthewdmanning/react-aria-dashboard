@@ -5,6 +5,7 @@ import * as z from "zod/v4";
 import {
   createDashboardOperations,
   type DashboardMcpDependencies,
+  type PanelPackageFiles,
   type DashboardMcpPaths,
 } from "./operations";
 
@@ -32,6 +33,42 @@ export function createDashboardMcpServer(
     name: "personal-dashboard",
     version: "0.0.0",
   });
+
+  server.registerTool(
+    "preview-panel-package",
+    {
+      description: "Validate an ephemeral panel package before user approval.",
+      inputSchema: z.object({
+        manifest: z.record(z.string(), z.unknown()),
+        schema: z.string(),
+        component: z.string(),
+        formatter: z.string().optional(),
+      }),
+    },
+    async (files) =>
+      result(
+        JSON.stringify(
+          await operations.previewPanelPackage(files as PanelPackageFiles),
+        ),
+      ),
+  );
+  server.registerTool(
+    "apply-panel-package",
+    {
+      description:
+        "Persist an approved panel package and add its dashboard wiring.",
+      inputSchema: z.object({
+        manifest: z.record(z.string(), z.unknown()),
+        schema: z.string(),
+        component: z.string(),
+        formatter: z.string().optional(),
+      }),
+    },
+    async (files) => {
+      await operations.applyPanelPackage(files as PanelPackageFiles);
+      return result("Panel package applied");
+    },
+  );
 
   server.registerTool(
     "refresh-google-calendar",

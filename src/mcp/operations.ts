@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import {
@@ -15,6 +15,10 @@ import {
   type FetchCalendar,
   type GoogleCalendarTokenProvider,
 } from "../server/integrations/google-calendar";
+import {
+  validatePanelPackageManifest,
+  type PanelPackageManifest,
+} from "./panel-packages";
 
 export interface DashboardMcpDependencies {
   tokenProvider: GoogleCalendarTokenProvider;
@@ -24,6 +28,13 @@ export interface DashboardMcpDependencies {
 export interface DashboardMcpPaths {
   configurationPath?: string;
   calendarDataPath?: string;
+}
+
+export interface PanelPackageFiles {
+  manifest: PanelPackageManifest;
+  schema: string;
+  component: string;
+  formatter?: string;
 }
 
 function requireAccess(access: AgentAccess, operation: "read" | "write") {
@@ -66,7 +77,87 @@ export function createDashboardOperations(
       .agentPermissions;
   }
 
+  function validatePanelPreview(files: PanelPackageFiles) {
+    const manifest = validatePanelPackageManifest(files.manifest);
+    if (
+      manifest.schema !== "schema.json" ||
+      manifest.component !== "panel.tsx"
+    ) {
+      throw new Error("Panel preview requires schema.json and panel.tsx");
+    }
+    const forbidden =
+      /(?:import\s+.*from\s+|require\s*\()?['"](?:node:)?(?:child_process|fs|net|http|https|os|process)['"]/;
+    if (
+      forbidden.test(files.component) ||
+      (files.formatter && forbidden.test(files.formatter))
+    ) {
+      throw new Error("Panel package uses a forbidden API");
+    }
+    JSON.parse(files.schema);
+    return manifest;
+  }
+
   return {
+    async previewPanelPackage(files: PanelPackageFiles) {
+      const manifest = validatePanelPreview(files);
+      return { id: manifest.id, title: manifest.title, preview: true };
+    },
+
+    async applyPanelPackage(files: PanelPackageFiles): Promise<void> {
+      const configuration = await readDashboardConfiguration(configurationPath);
+      requireAccess(configuration.agentPermissions.configuration, "write");
+      requireAccess(configuration.agentPermissions.artifacts, "write");
+      const manifest = validatePanelPreview(files);
+      const packageRoot = join(workspace, "panels", manifest.id);
+      const temporaryRoot = `${packageRoot}.${process.pid}.tmp`;
+      const panelConfiguration = {
+        ...configuration,
+        panels: [
+          ...configuration.panels,
+          {
+            id: manifest.id,
+            title: manifest.title,
+            definition: manifest.id,
+          },
+        ],
+        wiring: [
+          ...configuration.wiring,
+          {
+            panelId: manifest.id,
+            source: manifest.sources[0] ?? manifest.id,
+            formatter: manifest.formatter ? manifest.id : "identity",
+          },
+        ],
+        arrangement: [...configuration.arrangement, manifest.id],
+      };
+      parseDashboardConfiguration(panelConfiguration);
+      await mkdir(temporaryRoot, { recursive: true });
+      await writeFile(
+        join(temporaryRoot, "panel.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`,
+      );
+      await writeFile(
+        join(temporaryRoot, "schema.json"),
+        `${files.schema.trim()}\n`,
+      );
+      await writeFile(join(temporaryRoot, "panel.tsx"), files.component);
+      if (files.formatter)
+        await writeFile(join(temporaryRoot, "formatter.ts"), files.formatter);
+      let previousPackage: string | undefined;
+      try {
+        previousPackage = `${packageRoot}.${process.pid}.bak`;
+        await rename(packageRoot, previousPackage).catch(() => undefined);
+        await rename(temporaryRoot, packageRoot);
+        await replaceDashboardConfiguration(configurationPath, panelConfiguration);
+        if (previousPackage) await rm(previousPackage, { recursive: true, force: true });
+      } catch (error) {
+        await rm(temporaryRoot, { recursive: true, force: true });
+        await rm(packageRoot, { recursive: true, force: true });
+        if (previousPackage) await rename(previousPackage, packageRoot).catch(() => undefined);
+        throw error;
+      }
+    },
+
     async refreshGoogleCalendar(): Promise<unknown> {
       const configuration = await readDashboardConfiguration(configurationPath);
       requireAccess(configuration.agentPermissions.data, "write");
