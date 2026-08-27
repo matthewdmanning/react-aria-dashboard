@@ -71,14 +71,14 @@ export function createDashboardMcpServer(
   );
 
   server.registerTool(
-    "refresh-google-calendar",
+    "refresh",
     {
       description:
-        "Pull the saved Google Calendar integration when data write access permits it.",
-      inputSchema: z.object({}),
+        "Refresh a saved integration when data write access permits it.",
+      inputSchema: z.object({ source: z.string() }),
     },
-    async () =>
-      result(JSON.stringify(await operations.refreshGoogleCalendar())),
+    async ({ source }) =>
+      result(JSON.stringify(await operations.refreshSource(source))),
   );
   server.registerTool(
     "inspect-dashboard-configuration",

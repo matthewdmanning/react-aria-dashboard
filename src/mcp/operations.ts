@@ -163,14 +163,25 @@ export function createDashboardOperations(
       }
     },
 
-    async refreshGoogleCalendar(): Promise<unknown> {
+    async refreshSource(sourceId: string): Promise<unknown> {
       const configuration = await readDashboardConfiguration(configurationPath);
       requireAccess(configuration.agentPermissions.data, "write");
-      return pullGoogleCalendar({
-        ...dependencies,
-        configurationPath,
-        dataPath: calendarDataPath,
-      });
+      const integration = configuration.integrations.find(
+        (candidate) => candidate.id === sourceId,
+      );
+      if (!integration) throw new Error(`Unknown source ID: ${sourceId}`);
+
+      switch (integration.type) {
+        case "google-calendar":
+          return pullGoogleCalendar({
+            ...dependencies,
+            configurationPath,
+            dataPath: calendarDataPath,
+            integrationId: sourceId,
+          });
+        default:
+          throw new Error(`Unsupported integration type: ${integration.type}`);
+      }
     },
     async inspectConfiguration(): Promise<DashboardConfiguration> {
       const configuration = await readDashboardConfiguration(configurationPath);
