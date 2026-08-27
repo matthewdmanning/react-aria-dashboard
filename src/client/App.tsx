@@ -1,2 +1,86 @@
-// Root React Aria UI module.
-export {};
+import { useEffect, useState } from "react";
+
+import { renderDashboard, type DashboardConfiguration } from "../dashboard";
+import {
+  loadDashboardConfiguration,
+  saveDashboardConfiguration,
+} from "./dashboard-configuration-client";
+import {
+  loadGoogleCalendarSource,
+  refreshGoogleCalendar,
+} from "./google-calendar-client";
+import { formatMessage } from "./formatters/message";
+import { includedPanelDefinitions } from "./panels";
+import { saveDashboardSettings, Settings } from "./Settings";
+import { formatGoogleCalendar } from "./formatters/google-calendar";
+
+export function App() {
+  const [configuration, setConfiguration] = useState<DashboardConfiguration>();
+  const [calendarSource, setCalendarSource] = useState<unknown>();
+  const [calendarError, setCalendarError] = useState<string>();
+
+  useEffect(() => {
+    void loadDashboardConfiguration().then(setConfiguration);
+    void loadGoogleCalendarSource()
+      .then(setCalendarSource)
+      .catch((error: unknown) => {
+        setCalendarError(
+          error instanceof Error ? error.message : "Calendar unavailable",
+        );
+      });
+  }, []);
+
+  if (!configuration) return <p>Loading dashboard…</p>;
+
+  return (
+    <>
+      {renderDashboard(configuration, {
+        panelDefinitions: includedPanelDefinitions,
+        sources: {
+          welcome: { text: "Dashboard architecture is ready." },
+          "google-calendar": calendarSource,
+        },
+        formatters: {
+          message: formatMessage,
+          "google-calendar": formatGoogleCalendar,
+        },
+      })}
+      <section aria-label="Google Calendar controls">
+        <button
+          type="button"
+          onClick={() =>
+            void refreshGoogleCalendar()
+              .then(setCalendarSource)
+              .then(() => setCalendarError(undefined))
+              .catch((error: unknown) =>
+                setCalendarError(
+                  error instanceof Error
+                    ? error.message
+                    : "Calendar refresh failed",
+                ),
+              )
+          }
+        >
+          Refresh Google Calendar
+        </button>
+        {calendarError ? <p role="alert">{calendarError}</p> : null}
+      </section>
+      <details>
+        <summary>Settings</summary>
+        <Settings
+          configuration={configuration}
+          themes={["calm", "contrast"]}
+          onSave={async (settings) =>
+            setConfiguration(
+              await saveDashboardSettings(
+                configuration,
+                settings,
+                saveDashboardConfiguration,
+              ),
+            )
+          }
+        />
+      </details>
+    </>
+  );
+}
