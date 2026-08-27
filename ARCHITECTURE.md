@@ -6,7 +6,7 @@ This document is the authoritative source for the dashboard architecture. It sup
 
 ## Central principle
 
-The dashboard MCP provides the interface through which an agent can change any or all parts of a dashboard in response to user prompts.
+The standalone dashboard MCP module provides the interface through which an agent can change any or all parts of a dashboard in response to user prompts.
 
 The dashboard is not one fixed object or universal data model. Its structure, data relationships, panels, code, presentation, and integrations may change when the agent implements the user's request.
 

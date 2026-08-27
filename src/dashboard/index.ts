@@ -76,13 +76,16 @@ export function parseDashboardConfiguration(
   candidate: unknown,
 ): DashboardConfiguration {
   const configuration = dashboardConfigurationSchema.parse(candidate);
-  const credentialKey = /credential|password|secret|token|api.?key|access.?key/i;
+  const credentialKey =
+    /credential|password|secret|token|api.?key|access.?key/i;
   if (
     configuration.integrations.some(({ settings }) =>
       Object.keys(settings).some((key) => credentialKey.test(key)),
     )
   ) {
-    throw new Error("Invalid dashboard configuration: integration credentials are not allowed");
+    throw new Error(
+      "Invalid dashboard configuration: integration credentials are not allowed",
+    );
   }
   const panelIds = new Set(configuration.panels.map(({ id }) => id));
   const wiredIds = new Set(configuration.wiring.map(({ panelId }) => panelId));
@@ -97,7 +100,9 @@ export function parseDashboardConfiguration(
     configuration.wiring.some(({ panelId }) => !panelIds.has(panelId)) ||
     configuration.arrangement.some((panelId) => !panelIds.has(panelId))
   ) {
-    throw new Error("Invalid dashboard configuration: panel wiring is incomplete");
+    throw new Error(
+      "Invalid dashboard configuration: panel wiring is incomplete",
+    );
   }
 
   return configuration;
@@ -114,7 +119,9 @@ export function renderDashboard(
   runtime: DashboardRuntime,
 ): ReactElement {
   const configuration = parseDashboardConfiguration(candidate);
-  const panels = new Map(configuration.panels.map((panel) => [panel.id, panel]));
+  const panels = new Map(
+    configuration.panels.map((panel) => [panel.id, panel]),
+  );
   const wiring = new Map(
     configuration.wiring.map((connection) => [connection.panelId, connection]),
   );
@@ -131,8 +138,14 @@ export function renderDashboard(
       const definition = runtime.panelDefinitions[panel.definition];
       const formatter = runtime.formatters[connection.formatter];
 
-      if (!definition || !formatter || !(connection.source in runtime.sources)) {
-        throw new Error(`Dashboard runtime is missing wiring for panel: ${panelId}`);
+      if (
+        !definition ||
+        !formatter ||
+        !(connection.source in runtime.sources)
+      ) {
+        throw new Error(
+          `Dashboard runtime is missing wiring for panel: ${panelId}`,
+        );
       }
 
       const data = formatter(runtime.sources[connection.source]);

@@ -1,9 +1,4 @@
-export {
-  calendarPanel,
-  cardsPanel,
-  chartPanel,
-  tablePanel,
-} from "./display";
+export { calendarPanel, cardsPanel, chartPanel, tablePanel } from "./display";
 export { messagePanel } from "./message";
 
 import { calendarPanel, cardsPanel, chartPanel, tablePanel } from "./display";

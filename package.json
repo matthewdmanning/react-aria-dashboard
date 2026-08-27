@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx src/server/index.ts",
     "build": "tsc --noEmit && vite build",
-    "mcp": "tsx src/server/mcp.ts",
+    "mcp": "tsx src/mcp/index.ts",
     "check": "npm run format:check && npm run typecheck && npm test && npm run build && npm run test:e2e",
     "format:check": "npx --yes prettier@3.6.2 --check \"**/*.md\"",
     "typecheck": "tsc --noEmit",

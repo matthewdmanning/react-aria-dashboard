@@ -8,6 +8,12 @@ import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,
 } from "./dashboard-store";
+import {
+  pullGoogleCalendar,
+  readGoogleCalendarSource,
+  type FetchCalendar,
+  type GoogleCalendarTokenProvider,
+} from "./integrations/google-calendar";
 
 export async function handleDashboardConfigurationRequest(
   request: Request,
@@ -34,9 +40,42 @@ export async function handleDashboardConfigurationRequest(
   return new Response("Method not allowed", { status: 405 });
 }
 
+export async function handleGoogleCalendarRequest(
+  request: Request,
+  configurationPath: string,
+  dataPath: string,
+  dependencies: {
+    tokenProvider: GoogleCalendarTokenProvider;
+    fetch?: FetchCalendar;
+  },
+): Promise<Response> {
+  if (request.method === "GET") {
+    const source = await readGoogleCalendarSource(dataPath);
+    return source === undefined
+      ? new Response(null, { status: 404 })
+      : Response.json(source);
+  }
+  if (request.method === "POST") {
+    return Response.json(
+      await pullGoogleCalendar({
+        ...dependencies,
+        configurationPath,
+        dataPath,
+      }),
+    );
+  }
+  return new Response("Method not allowed", { status: 405 });
+}
+
 async function startServer() {
   const dashboardPath =
     process.env.DASHBOARD_DATA_PATH ?? resolve(".dashboard/dashboard.json");
+  const calendarDataPath =
+    process.env.DASHBOARD_CALENDAR_DATA_PATH ??
+    resolve(".dashboard/google-calendar.json");
+  const tokenProvider: GoogleCalendarTokenProvider = async () => {
+    throw new Error("Google Calendar credentials are not configured");
+  };
   const vite = await createViteServer({ server: { middlewareMode: true } });
   const server = createServer(async (request, response) => {
     if (request.url === "/api/dashboard-configuration") {
@@ -46,7 +85,9 @@ async function startServer() {
         const result = await handleDashboardConfigurationRequest(
           new Request(`http://dashboard${request.url}`, {
             method: request.method,
-            body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
+            body: chunks.length
+              ? Buffer.concat(chunks).toString("utf8")
+              : undefined,
           }),
           dashboardPath,
         );
@@ -54,7 +95,35 @@ async function startServer() {
         response.end(Buffer.from(await result.arrayBuffer()));
       } catch (error) {
         response.writeHead(400, { "content-type": "text/plain" });
-        response.end(error instanceof Error ? error.message : "Invalid request");
+        response.end(
+          error instanceof Error ? error.message : "Invalid request",
+        );
+      }
+      return;
+    }
+
+    if (request.url === "/api/google-calendar") {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const result = await handleGoogleCalendarRequest(
+          new Request(`http://dashboard${request.url}`, {
+            method: request.method,
+            body: chunks.length
+              ? Buffer.concat(chunks).toString("utf8")
+              : undefined,
+          }),
+          dashboardPath,
+          calendarDataPath,
+          { tokenProvider },
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(
+          error instanceof Error ? error.message : "Calendar request failed",
+        );
       }
       return;
     }
@@ -65,6 +134,9 @@ async function startServer() {
   server.listen(Number(process.env.PORT ?? 5173), "127.0.0.1");
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   void startServer();
 }
