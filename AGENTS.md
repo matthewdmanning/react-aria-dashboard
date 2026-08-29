@@ -10,15 +10,15 @@ This is a single-package, single-process TypeScript repository.
 - `src/mcp/` owns the standalone MCP server and its tools.
 - Keep focused tests beside their modules; use `tests/` for whole-app behavior.
 - `examples/dashboard.json` is sample data, never the runtime source of truth.
-- `ARCHITECTURE.md` is the authoritative architecture document and supersedes conflicting architecture statements elsewhere.
-- `CONTEXT.md` defines domain vocabulary; `agent-docs/` holds the product specification.
+- `ARCHITECTURE.md` is the authoritative architecture document, domain vocabulary included, and supersedes conflicting statements elsewhere.
+- `agent-docs/` holds the product specification.
 - Runtime dashboard data and installed themes belong at a configurable path outside `src/`.
 
 Keep the dashboard general-purpose. Job-search and study data are examples, not permanent domain concepts.
 
 ## Documentation Authority
 
-Before coding, read the active checkout's `ARCHITECTURE.md`, `CONTEXT.md`, `AGENTS.md`, and relevant current product specification. Use the latest active documentation even when issues, comments, audits, old branches, memory, examples, tests, or implementation disagree. Stop and correct active documentation before coding if authoritative documents conflict.
+Before coding, read the active checkout's `ARCHITECTURE.md`, `AGENTS.md`, and relevant current product specification. Use the latest active documentation even when issues, comments, audits, old branches, memory, examples, tests, or implementation disagree. Stop and correct active documentation before coding if authoritative documents conflict.
 
 Never derive current requirements from material marked legacy, quarantined, superseded, archived, or backup. Quarantined material is historical evidence only.
 

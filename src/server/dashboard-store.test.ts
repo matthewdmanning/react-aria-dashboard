@@ -4,14 +4,17 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import type { DashboardConfiguration } from "../dashboard";
-import { readDashboardConfiguration, replaceDashboardConfiguration } from "./dashboard-store";
+import {
+  readDashboardConfiguration,
+  replaceDashboardConfiguration,
+} from "./dashboard-store";
 
 const configuration: DashboardConfiguration = {
   version: 1,
   integrations: [],
   theme: "calm",
   fontScale: 1,
-  agentPermissions: { configuration: "read", artifacts: "none", data: "none" },
+  agentPermissions: { configuration: "read", data: "none" },
   panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
@@ -25,6 +28,8 @@ describe("dashboard configuration persistence contract", () => {
     await replaceDashboardConfiguration(path, configuration);
 
     expect(await readDashboardConfiguration(path)).toEqual(configuration);
-    expect(await readFile(path, "utf8")).toBe(`${JSON.stringify(configuration, null, 2)}\n`);
+    expect(await readFile(path, "utf8")).toBe(
+      `${JSON.stringify(configuration, null, 2)}\n`,
+    );
   });
 });

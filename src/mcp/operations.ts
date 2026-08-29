@@ -106,7 +106,7 @@ export function createDashboardOperations(
     async applyPanelPackage(files: PanelPackageFiles): Promise<void> {
       const configuration = await readDashboardConfiguration(configurationPath);
       requireAccess(configuration.agentPermissions.configuration, "write");
-      requireAccess(configuration.agentPermissions.artifacts, "write");
+      requireAccess(configuration.agentPermissions.data, "write");
       const manifest = validatePanelPreview(files);
       const packageRoot = join(workspace, "panels", manifest.id);
       const temporaryRoot = `${packageRoot}.${process.pid}.tmp`;
@@ -200,16 +200,14 @@ export function createDashboardOperations(
     },
 
     async readArtifact(path: string): Promise<string> {
-      const { target, scoped } = artifactPath(path);
-      const category = scoped.startsWith(`data${sep}`) ? "data" : "artifacts";
-      requireAccess((await permissions())[category], "read");
+      const { target } = artifactPath(path);
+      requireAccess((await permissions()).data, "read");
       return readFile(target, "utf8");
     },
 
     async writeArtifact(path: string, content: string): Promise<void> {
-      const { target, scoped } = artifactPath(path);
-      const category = scoped.startsWith(`data${sep}`) ? "data" : "artifacts";
-      requireAccess((await permissions())[category], "write");
+      const { target } = artifactPath(path);
+      requireAccess((await permissions()).data, "write");
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, content);
     },

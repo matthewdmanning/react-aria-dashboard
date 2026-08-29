@@ -27,7 +27,6 @@ const dashboardConfigurationSchema = z
     agentPermissions: z
       .object({
         configuration: z.enum(["none", "read", "write"]),
-        artifacts: z.enum(["none", "read", "write"]),
         data: z.enum(["none", "read", "write"]),
       })
       .strict(),
@@ -64,7 +63,6 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
   fontScale: 1,
   agentPermissions: {
     configuration: "read",
-    artifacts: "none",
     data: "none",
   },
   panels: [{ id: "welcome", title: "Dashboard", definition: "message" }],

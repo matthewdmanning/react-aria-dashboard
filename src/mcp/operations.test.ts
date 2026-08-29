@@ -15,8 +15,7 @@ describe("dashboard MCP operations contract", () => {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "write" as const,
-        artifacts: "write" as const,
-        data: "none" as const,
+        data: "write" as const,
       },
     };
     await replaceDashboardConfiguration(configurationPath, configuration);
@@ -36,9 +35,6 @@ describe("dashboard MCP operations contract", () => {
 
     await expect(operations.readArtifact("panels/weather.tsx")).resolves.toBe(
       "export const weather = true;\n",
-    );
-    await expect(operations.readArtifact("data/private.json")).rejects.toThrow(
-      "permission",
     );
     await expect(
       operations.writeArtifact("../outside.txt", "no"),
@@ -71,7 +67,6 @@ describe("dashboard MCP operations contract", () => {
       ],
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "write",
       },
     });
@@ -104,7 +99,6 @@ describe("dashboard MCP operations contract", () => {
       ],
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "read",
       },
     });
@@ -121,7 +115,6 @@ describe("dashboard MCP operations contract", () => {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "write",
       },
     });
@@ -156,7 +149,6 @@ describe("dashboard MCP operations contract", () => {
       integrations: [{ id: "notes", type: "notes", settings: {} }],
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "write",
       },
     });
@@ -189,8 +181,7 @@ describe("dashboard MCP operations contract", () => {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "write",
-        artifacts: "write",
-        data: "none",
+        data: "write",
       },
     });
     const operations = createDashboardOperations(workspace);

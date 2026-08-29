@@ -17,7 +17,7 @@ const configuration: DashboardConfiguration = {
   integrations: [],
   theme: "calm",
   fontScale: 1,
-  agentPermissions: { configuration: "read", artifacts: "none", data: "none" },
+  agentPermissions: { configuration: "read", data: "none" },
   panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
@@ -33,11 +33,18 @@ describe("Settings contract", () => {
       configuration,
       {
         integrations: [
-          { id: "calendar", type: "google-calendar", settings: { calendarId: "team" } },
+          {
+            id: "calendar",
+            type: "google-calendar",
+            settings: { calendarId: "team" },
+          },
         ],
         theme: "contrast",
         fontScale: 1.25,
-        agentPermissions: { configuration: "write", artifacts: "read", data: "read" },
+        agentPermissions: {
+          configuration: "write",
+          data: "read",
+        },
       },
       (candidate) => replaceDashboardConfiguration(path, candidate),
     );
@@ -47,7 +54,7 @@ describe("Settings contract", () => {
       theme: "contrast",
       fontScale: 1.25,
       integrations: [{ id: "calendar", type: "google-calendar" }],
-      agentPermissions: { configuration: "write", artifacts: "read", data: "read" },
+      agentPermissions: { configuration: "write", data: "read" },
       panels: configuration.panels,
       wiring: configuration.wiring,
       arrangement: configuration.arrangement,
@@ -77,7 +84,11 @@ describe("Settings contract", () => {
         configuration,
         {
           integrations: [
-            { id: "calendar", type: "google-calendar", settings: { accessToken: "private" } },
+            {
+              id: "calendar",
+              type: "google-calendar",
+              settings: { accessToken: "private" },
+            },
           ],
           theme: "calm",
           fontScale: 1,
