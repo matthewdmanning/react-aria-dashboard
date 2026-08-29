@@ -26,7 +26,7 @@ async function calendarFiles() {
 }
 
 describe("Google Calendar integration contract", () => {
-  test("pulls the saved calendar, retains its raw response, and formats panel data separately", async () => {
+  test("pulls the saved calendar, retains its raw response, and formats card data separately", async () => {
     const paths = await calendarFiles();
     const source = {
       kind: "calendar#events",

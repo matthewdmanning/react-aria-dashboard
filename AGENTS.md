@@ -5,7 +5,7 @@
 This is a single-package, single-process TypeScript repository.
 
 - `src/dashboard/` is the central domain module; callers use its interface through `index.ts`.
-- `src/client/` contains the React Aria UI, panels, and themes.
+- `src/client/` contains the React Aria UI, cards, and themes.
 - `src/server/` owns persistence, authentication, and external integrations.
 - `src/mcp/` owns the standalone MCP server and its tools.
 - Keep focused tests beside their modules; use `tests/` for whole-app behavior.

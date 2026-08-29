@@ -17,15 +17,15 @@ const configuration: DashboardConfiguration = {
   integrations: [],
   theme: "calm",
   fontScale: 1,
-  agentPermissions: { configuration: "read", data: "none", panels: "none" },
-  panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
-  wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
+  agentPermissions: { configuration: "read", data: "none", cards: "none" },
+  cards: [{ id: "welcome", title: "Welcome", definition: "message" }],
+  wiring: [{ cardId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
   formatterSpecs: {},
 };
 
 describe("Settings contract", () => {
-  test("persists direct settings changes without changing panel configuration", async () => {
+  test("persists direct settings changes without changing card configuration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "settings-"));
     const path = join(directory, "dashboard.json");
     await replaceDashboardConfiguration(path, configuration);
@@ -45,7 +45,7 @@ describe("Settings contract", () => {
         agentPermissions: {
           configuration: "write",
           data: "read",
-          panels: "none",
+          cards: "none",
         },
       },
       (candidate) => replaceDashboardConfiguration(path, candidate),
@@ -57,7 +57,7 @@ describe("Settings contract", () => {
       fontScale: 1.25,
       integrations: [{ id: "calendar", type: "google-calendar" }],
       agentPermissions: { configuration: "write", data: "read" },
-      panels: configuration.panels,
+      cards: configuration.cards,
       wiring: configuration.wiring,
       arrangement: configuration.arrangement,
     });
@@ -76,7 +76,7 @@ describe("Settings contract", () => {
     expect(html).toContain("Font scale");
     expect(html).toContain("Integrations");
     expect(html).toContain("Agent permissions");
-    expect(html).not.toContain("Panel arrangement");
+    expect(html).not.toContain("Card arrangement");
     expect(html).not.toContain("Formatter");
   });
 

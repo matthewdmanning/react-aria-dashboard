@@ -1,13 +1,12 @@
-import type { PanelDefinition } from "../../dashboard";
-import { panelKindSchemas } from "../../dashboard/panel-kinds";
+import type * as z from "zod/v4";
 
-export interface TablePanelData {
-  columns: { key: string; label: string }[];
-  rows: Record<string, string | number | null>[];
-}
+import type { CardDefinition } from "../../dashboard";
+import { cardVariantSchemas } from "../../dashboard/card-variants";
 
-export const tablePanel: PanelDefinition<TablePanelData> = {
-  schema: panelKindSchemas.table,
+export type TableCardData = z.infer<typeof cardVariantSchemas.table>;
+
+export const tableCard: CardDefinition<TableCardData> = {
+  schema: cardVariantSchemas.table,
   Component: ({ data }) => (
     <table>
       <thead>
@@ -32,12 +31,10 @@ export const tablePanel: PanelDefinition<TablePanelData> = {
   ),
 };
 
-export interface CardsPanelData {
-  items: { id: string; title: string; body?: string }[];
-}
+export type ListCardData = z.infer<typeof cardVariantSchemas.list>;
 
-export const cardsPanel: PanelDefinition<CardsPanelData> = {
-  schema: panelKindSchemas.cards,
+export const listCard: CardDefinition<ListCardData> = {
+  schema: cardVariantSchemas.list,
   Component: ({ data }) => (
     <ul>
       {data.items.map(({ id, title, body }) => (
@@ -52,12 +49,10 @@ export const cardsPanel: PanelDefinition<CardsPanelData> = {
   ),
 };
 
-export interface CalendarPanelData {
-  events: { id: string; title: string; start: string; end?: string }[];
-}
+export type CalendarCardData = z.infer<typeof cardVariantSchemas.calendar>;
 
-export const calendarPanel: PanelDefinition<CalendarPanelData> = {
-  schema: panelKindSchemas.calendar,
+export const calendarCard: CardDefinition<CalendarCardData> = {
+  schema: cardVariantSchemas.calendar,
   Component: ({ data }) => (
     <ul>
       {data.events.map(({ id, title, start, end }) => (
@@ -75,14 +70,10 @@ export const calendarPanel: PanelDefinition<CalendarPanelData> = {
   ),
 };
 
-export interface ChartPanelData {
-  title: string;
-  summary: string;
-  series: { label: string; value: number }[];
-}
+export type ChartCardData = z.infer<typeof cardVariantSchemas.chart>;
 
-export const chartPanel: PanelDefinition<ChartPanelData> = {
-  schema: panelKindSchemas.chart,
+export const chartCard: CardDefinition<ChartCardData> = {
+  schema: cardVariantSchemas.chart,
   Component: ({ data }) => {
     const maximum = Math.max(1, ...data.series.map(({ value }) => value));
     return (

@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import * as z from "zod/v4";
 
 import {
   compileFormatterSpec,
@@ -8,7 +9,7 @@ import {
   renderDashboard,
   type DashboardConfiguration,
   type FormatterSpec,
-  type PanelDefinition,
+  type CardDefinition,
 } from "./index";
 
 const configuration: DashboardConfiguration = {
@@ -25,26 +26,22 @@ const configuration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "write",
     data: "write",
-    panels: "none",
+    cards: "none",
   },
-  panels: [
+  cards: [
     { id: "first", title: "First", definition: "message" },
     { id: "second", title: "Second", definition: "message" },
   ],
   wiring: [
-    { panelId: "first", source: "first-source", formatter: "message" },
-    { panelId: "second", source: "second-source", formatter: "message" },
+    { cardId: "first", source: "first-source", formatter: "message" },
+    { cardId: "second", source: "second-source", formatter: "message" },
   ],
   arrangement: ["second", "first"],
   formatterSpecs: {},
 };
 
-const message: PanelDefinition<{ message: string }> = {
-  schema: {
-    type: "object",
-    properties: { message: { type: "string" } },
-    required: ["message"],
-  },
+const message: CardDefinition<{ message: string }> = {
+  schema: z.object({ message: z.string() }),
   Component: ({ data }) => createElement("p", null, data.message),
 };
 
@@ -53,10 +50,10 @@ describe("dashboard configuration contract", () => {
     expect(parseDashboardConfiguration(configuration)).toEqual(configuration);
   });
 
-  test("renders panels in arrangement order through separate formatter wiring", () => {
+  test("renders cards in arrangement order through separate formatter wiring", () => {
     const html = renderToStaticMarkup(
       renderDashboard(configuration, {
-        panelDefinitions: { message },
+        cardDefinitions: { message },
         sources: {
           "first-source": { text: "First message" },
           "second-source": { text: "Second message" },
@@ -77,8 +74,8 @@ describe("dashboard configuration contract", () => {
       parseDashboardConfiguration({
         ...configuration,
         wiring: [
-          { panelId: "first", source: "first-source", formatter: "made-up" },
-          { panelId: "second", source: "second-source", formatter: "message" },
+          { cardId: "first", source: "first-source", formatter: "made-up" },
+          { cardId: "second", source: "second-source", formatter: "message" },
         ],
       }),
     ).toThrow("unknown formatter");
@@ -88,14 +85,16 @@ describe("dashboard configuration contract", () => {
 describe("compileFormatterSpec", () => {
   test("maps object fields with a fallback chain, default, and coercion", () => {
     const spec: FormatterSpec = {
-      kind: "object",
+      shape: "object",
       fields: {
         title: { from: ["summary", "title"], default: "Untitled" },
         temperature: { from: ["temp"], coerce: "string" },
         note: { from: ["missing"] },
       },
     };
-    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual({
+    expect(
+      compileFormatterSpec(spec)({ summary: "Standup", temp: 72 }),
+    ).toEqual({
       title: "Standup",
       temperature: "72",
     });
@@ -107,7 +106,7 @@ describe("compileFormatterSpec", () => {
 
   test("maps an array with $index and defaults to an empty array", () => {
     const spec: FormatterSpec = {
-      kind: "array",
+      shape: "array",
       from: ["items"],
       into: "events",
       fields: {
@@ -116,7 +115,9 @@ describe("compileFormatterSpec", () => {
       },
     };
     expect(
-      compileFormatterSpec(spec)({ items: [{ summary: "Standup" }, { id: "x" }] }),
+      compileFormatterSpec(spec)({
+        items: [{ summary: "Standup" }, { id: "x" }],
+      }),
     ).toEqual({
       events: [
         { id: "0", title: "Standup" },
@@ -133,12 +134,20 @@ describe("compileFormatterSpec", () => {
       "../client/formatters/google-calendar"
     );
     const spec: FormatterSpec = {
-      kind: "array",
+      shape: "array",
       from: ["items"],
       into: "events",
       fields: {
-        id: { from: ["id"], default: "calendar-event-$index", coerce: "string" },
-        title: { from: ["summary"], default: "Untitled event", coerce: "string" },
+        id: {
+          from: ["id"],
+          default: "calendar-event-$index",
+          coerce: "string",
+        },
+        title: {
+          from: ["summary"],
+          default: "Untitled event",
+          coerce: "string",
+        },
         start: {
           from: ["start.dateTime", "start.date"],
           default: "",
