@@ -14,7 +14,7 @@ The dashboard is not one fixed object or universal data model. Its structure, da
 
 Dashboard configuration is persistent configuration for integrations, the selected UI theme, font scaling, agent permissions, cards, card wiring, and card arrangement.
 
-The defined configuration structure records these dashboard concerns without imposing one universal structure on card data, relationships, UI code, JSON Schemas, or formatter code.
+The defined configuration structure records these dashboard concerns without imposing one universal structure on card data, relationships, UI code, schemas, or formatter code.
 
 ## Settings UI
 
@@ -31,7 +31,7 @@ A dashboard specifies the arrangement or ordering of cards on a page or display.
 A card variant is a fixed pair, defined in application source, not by the agent:
 
 - a UI component; and
-- a JSON Schema describing the data the component can display.
+- a schema describing the data the component can display.
 
 The component and schema form a contract: the component can render the contents of any data that fits the schema. Variants are few and rarely added — adding one is an ordinary code change, reviewed like any other, not an operation the MCP interface exposes. A variant is responsible only for displaying properly formatted data; it does not extract, remove, or reformat source data.
 
@@ -43,7 +43,7 @@ A card is data, never code: an id, a title, a reference to a card variant, a dat
 
 A formatter is either `"identity"` (the source data already matches the card variant's schema — a human or an agent wrote it directly, e.g. a prioritized task list), a fixed named function bundled with the application shell (not agent-editable), or a declarative mapping spec: field renaming, fallback chains, defaults, and array mapping over source data. Formatting is never arbitrary agent-authored code.
 
-The agent creates and maintains the wiring between source data, a formatter, a card variant, and the card's position in the dashboard. Defining and changing this wiring is within the project's scope. The agent is responsible for ensuring that formatted data fits the card variant's JSON Schema; the MCP server validates this proactively wherever the formatter can be evaluated server-side (identity or a declarative spec).
+The agent creates and maintains the wiring between source data, a formatter, a card variant, and the card's position in the dashboard. Defining and changing this wiring is within the project's scope. The agent is responsible for ensuring that formatted data fits the card variant's schema; the MCP server validates this proactively wherever the formatter can be evaluated server-side (identity or a declarative spec).
 
 ## Agent responsibility
 

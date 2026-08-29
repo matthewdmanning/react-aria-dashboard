@@ -24,7 +24,7 @@ A card is a config entry, not code. `add-card`/`edit-card` take:
 - **`formatter`** (optional) — `"identity"` if the source data already matches the variant's schema, a fixed built-in name, or omitted to default to `"identity"`.
 - **`formatterSpec`** (optional) — a declarative mapping spec (field renaming, `??` fallback chains, defaults, array mapping — see `compileFormatterSpec` in `src/dashboard/index.ts`) when the source data needs reshaping. Persisted under `formatterSpecs` in the dashboard configuration, keyed by formatter id.
 
-`add-card`/`edit-card` proactively validate: the `variant` must be real, and if a formatter can be evaluated server-side (`identity` or a `formatterSpec`), its output is Ajv-checked against the variant's schema before anything is persisted. Named built-in formatters (`message`, `google-calendar`) are trusted app-shell code and skip this check.
+`add-card`/`edit-card` proactively validate: the `variant` must be real, and if a formatter can be evaluated server-side (`identity` or a `formatterSpec`), its output is checked against the variant's zod schema before anything is persisted. Named built-in formatters (`message`, `google-calendar`) are trusted app-shell code and skip this check.
 
 - **`add-card`** — adds a new card; rejects if the id already exists.
 - **`edit-card`** — replaces an existing card's variant/source/formatter in place; rejects if the id doesn't exist yet. Position in `arrangement` is preserved.
