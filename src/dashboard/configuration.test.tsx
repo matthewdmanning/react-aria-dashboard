@@ -11,12 +11,17 @@ import {
 
 const configuration: DashboardConfiguration = {
   version: 1,
-  integrations: [{ id: "calendar", type: "google-calendar", settings: { calendarId: "team" } }],
+  integrations: [
+    {
+      id: "calendar",
+      type: "google-calendar",
+      settings: { calendarId: "team" },
+    },
+  ],
   theme: "calm",
   fontScale: 1.1,
   agentPermissions: {
     configuration: "write",
-    artifacts: "read",
     data: "write",
   },
   panels: [
@@ -58,6 +63,8 @@ describe("dashboard configuration contract", () => {
       }),
     );
 
-    expect(html).toContain("<section><h2>Second</h2><p>Second message</p></section><section><h2>First</h2><p>First message</p></section>");
+    expect(html).toContain(
+      "<section><h2>Second</h2><p>Second message</p></section><section><h2>First</h2><p>First message</p></section>",
+    );
   });
 });

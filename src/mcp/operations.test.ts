@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -15,8 +15,7 @@ describe("dashboard MCP operations contract", () => {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "write" as const,
-        artifacts: "write" as const,
-        data: "none" as const,
+        data: "write" as const,
       },
     };
     await replaceDashboardConfiguration(configurationPath, configuration);
@@ -37,9 +36,6 @@ describe("dashboard MCP operations contract", () => {
     await expect(operations.readArtifact("panels/weather.tsx")).resolves.toBe(
       "export const weather = true;\n",
     );
-    await expect(operations.readArtifact("data/private.json")).rejects.toThrow(
-      "permission",
-    );
     await expect(
       operations.writeArtifact("../outside.txt", "no"),
     ).rejects.toThrow("workspace");
@@ -51,20 +47,26 @@ describe("dashboard MCP operations contract", () => {
     );
   });
 
-  test("refreshes the saved Calendar only with data write permission", async () => {
+  test("refreshes the selected saved Calendar integration", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "calendar-mcp-"));
-    await replaceDashboardConfiguration(join(workspace, "dashboard.json"), {
+    const configurationPath = join(workspace, "dashboard.json");
+    const dataPath = join(workspace, "retained-calendar.json");
+    await replaceDashboardConfiguration(configurationPath, {
       ...defaultDashboardConfiguration,
       integrations: [
         {
-          id: "calendar",
+          id: "personal-calendar",
+          type: "google-calendar",
+          settings: { calendarId: "personal" },
+        },
+        {
+          id: "team-calendar",
           type: "google-calendar",
           settings: { calendarId: "team" },
         },
       ],
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "write",
       },
     });
@@ -72,32 +74,103 @@ describe("dashboard MCP operations contract", () => {
       expect(url).toContain("team");
       return Response.json({ items: [{ id: "event-1" }] });
     };
-    const operations = createDashboardOperations(workspace, {
-      tokenProvider: async () => "access-token",
-      fetch: fetchCalendar,
-    });
+    const operations = createDashboardOperations(
+      workspace,
+      {
+        tokenProvider: async () => "access-token",
+        fetch: fetchCalendar,
+      },
+      { configurationPath, calendarDataPath: dataPath },
+    );
 
-    await expect(operations.refreshGoogleCalendar()).resolves.toEqual({
+    await expect(operations.refreshSource("team-calendar")).resolves.toEqual({
       items: [{ id: "event-1" }],
     });
+    await expect(readFile(dataPath, "utf8")).resolves.toContain("event-1");
 
-    await replaceDashboardConfiguration(join(workspace, "dashboard.json"), {
+    await replaceDashboardConfiguration(configurationPath, {
       ...defaultDashboardConfiguration,
       integrations: [
         {
-          id: "calendar",
+          id: "team-calendar",
           type: "google-calendar",
           settings: { calendarId: "team" },
         },
       ],
       agentPermissions: {
         configuration: "none",
-        artifacts: "none",
         data: "read",
       },
     });
-    await expect(operations.refreshGoogleCalendar()).rejects.toThrow(
+    await expect(operations.refreshSource("team-calendar")).rejects.toThrow(
       "permission",
+    );
+  });
+
+  test("rejects an unknown source without changing retained data", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "unknown-source-mcp-"));
+    const configurationPath = join(workspace, "dashboard.json");
+    const dataPath = join(workspace, "retained-calendar.json");
+    await replaceDashboardConfiguration(configurationPath, {
+      ...defaultDashboardConfiguration,
+      agentPermissions: {
+        configuration: "none",
+        data: "write",
+      },
+    });
+    await writeFile(dataPath, '{"retained":true}\n');
+    const operations = createDashboardOperations(
+      workspace,
+      {
+        tokenProvider: async () => {
+          throw new Error("token provider should not run");
+        },
+        fetch: async () => {
+          throw new Error("fetch should not run");
+        },
+      },
+      { configurationPath, calendarDataPath: dataPath },
+    );
+
+    await expect(operations.refreshSource("missing")).rejects.toThrow(
+      "Unknown source ID: missing",
+    );
+    await expect(readFile(dataPath, "utf8")).resolves.toBe(
+      '{"retained":true}\n',
+    );
+  });
+
+  test("rejects an unsupported integration type without changing retained data", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "unsupported-source-mcp-"));
+    const configurationPath = join(workspace, "dashboard.json");
+    const dataPath = join(workspace, "retained-source.json");
+    await replaceDashboardConfiguration(configurationPath, {
+      ...defaultDashboardConfiguration,
+      integrations: [{ id: "notes", type: "notes", settings: {} }],
+      agentPermissions: {
+        configuration: "none",
+        data: "write",
+      },
+    });
+    await writeFile(dataPath, '{"retained":true}\n');
+    const operations = createDashboardOperations(
+      workspace,
+      {
+        tokenProvider: async () => {
+          throw new Error("token provider should not run");
+        },
+        fetch: async () => {
+          throw new Error("fetch should not run");
+        },
+      },
+      { configurationPath, calendarDataPath: dataPath },
+    );
+
+    await expect(operations.refreshSource("notes")).rejects.toThrow(
+      "Unsupported integration type: notes",
+    );
+    await expect(readFile(dataPath, "utf8")).resolves.toBe(
+      '{"retained":true}\n',
     );
   });
 
@@ -108,8 +181,7 @@ describe("dashboard MCP operations contract", () => {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "write",
-        artifacts: "write",
-        data: "none",
+        data: "write",
       },
     });
     const operations = createDashboardOperations(workspace);
