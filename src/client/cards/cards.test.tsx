@@ -17,19 +17,34 @@ describe("included card contract", () => {
       [messageCard, { message: "Ready" }, "Ready"],
       [
         tableCard,
-        { columns: [{ key: "task", label: "Task" }], rows: [{ task: "Review" }] },
-        "<th scope=\"col\">Task</th>",
+        {
+          columns: [{ key: "task", label: "Task" }],
+          rows: [{ task: "Review" }],
+        },
+        '<th scope="col">Task</th>',
       ],
-      [listCard, { items: [{ id: "1", title: "Plan", body: "Today" }] }, "<article>"],
+      [
+        listCard,
+        { items: [{ id: "1", title: "Plan", body: "Today" }] },
+        "<article>",
+      ],
       [
         calendarCard,
-        { events: [{ id: "1", title: "Stand-up", start: "2026-08-27T09:00:00Z" }] },
-        "<time dateTime=\"2026-08-27T09:00:00Z\">",
+        {
+          events: [
+            { id: "1", title: "Stand-up", start: "2026-08-27T09:00:00Z" },
+          ],
+        },
+        '<time dateTime="2026-08-27T09:00:00Z">',
       ],
       [
         chartCard,
-        { title: "Progress", summary: "Two completed", series: [{ label: "Done", value: 2 }] },
-        "aria-label=\"Two completed\"",
+        {
+          title: "Progress",
+          summary: "Two completed",
+          series: [{ label: "Done", value: 2 }],
+        },
+        'aria-label="Two completed"',
       ],
     ] as const;
 

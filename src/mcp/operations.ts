@@ -164,7 +164,11 @@ export function createDashboardOperations(
       resolveFormatterFunction(formatterKey, formatterSpecs),
     );
 
-    const cardEntry = { id: args.id, title: args.title, definition: args.variant };
+    const cardEntry = {
+      id: args.id,
+      title: args.title,
+      definition: args.variant,
+    };
     const wiringEntry = {
       cardId: args.id,
       source: args.source,

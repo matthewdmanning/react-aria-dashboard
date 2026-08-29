@@ -354,7 +354,10 @@ describe("dashboard MCP operations contract", () => {
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      wiring: [{ cardId: "welcome" }, { cardId: "weather", formatter: "weather" }],
+      wiring: [
+        { cardId: "welcome" },
+        { cardId: "weather", formatter: "weather" },
+      ],
       formatterSpecs: {
         weather: {
           shape: "object",

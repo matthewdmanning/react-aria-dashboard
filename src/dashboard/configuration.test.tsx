@@ -95,7 +95,9 @@ describe("compileFormatterSpec", () => {
         note: { from: ["missing"] },
       },
     };
-    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual({
+    expect(
+      compileFormatterSpec(spec)({ summary: "Standup", temp: 72 }),
+    ).toEqual({
       title: "Standup",
       temperature: "72",
     });
@@ -116,7 +118,9 @@ describe("compileFormatterSpec", () => {
       },
     };
     expect(
-      compileFormatterSpec(spec)({ items: [{ summary: "Standup" }, { id: "x" }] }),
+      compileFormatterSpec(spec)({
+        items: [{ summary: "Standup" }, { id: "x" }],
+      }),
     ).toEqual({
       events: [
         { id: "0", title: "Standup" },
@@ -137,8 +141,16 @@ describe("compileFormatterSpec", () => {
       from: ["items"],
       into: "events",
       fields: {
-        id: { from: ["id"], default: "calendar-event-$index", coerce: "string" },
-        title: { from: ["summary"], default: "Untitled event", coerce: "string" },
+        id: {
+          from: ["id"],
+          default: "calendar-event-$index",
+          coerce: "string",
+        },
+        title: {
+          from: ["summary"],
+          default: "Untitled event",
+          coerce: "string",
+        },
         start: {
           from: ["start.dateTime", "start.date"],
           default: "",

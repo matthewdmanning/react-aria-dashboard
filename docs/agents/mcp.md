@@ -6,14 +6,14 @@ Its architecture and domain concepts conform to [`ARCHITECTURE.md`](../../ARCHIT
 
 ## Standards & Architectural Conformance
 
-| Area                            | Conformance & Guarantees                                                                                                                                                                                                |
-| :------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Module Isolation**            | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                                                               |
-| **Entrypoint & Transport**      | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                                                           |
-| **Permission Governance**       | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `cards`) configured via Settings.                                                                                                          |
-| **Privilege Escalation Guard**  | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                                                             |
-| **Cards are data, never code**  | `add-card`/`edit-card` take a variant, a source, and a formatter — never UI or formatter source text. Governance is structural: there is no field to put a raw HTML element, an off-token color, or arbitrary code into. |
-| **Sandbox & Path Isolation**    | Enforces path containment to prevent directory traversal outside `data/`.                                                                                                                                               |
+| Area                           | Conformance & Guarantees                                                                                                                                                                                                 |
+| :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Module Isolation**           | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                                                                |
+| **Entrypoint & Transport**     | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                                                            |
+| **Permission Governance**      | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `cards`) configured via Settings.                                                                                                           |
+| **Privilege Escalation Guard** | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                                                              |
+| **Cards are data, never code** | `add-card`/`edit-card` take a variant, a source, and a formatter — never UI or formatter source text. Governance is structural: there is no field to put a raw HTML element, an off-token color, or arbitrary code into. |
+| **Sandbox & Path Isolation**   | Enforces path containment to prevent directory traversal outside `data/`.                                                                                                                                                |
 
 ## Card authoring workflow
 

@@ -13,7 +13,9 @@ export type AgentAccess = "none" | "read" | "write";
 const fieldSpecSchema = z
   .object({
     from: z.array(z.string().min(1)).min(1),
-    default: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+    default: z
+      .union([z.string(), z.number(), z.boolean(), z.null()])
+      .optional(),
     coerce: z.literal("string").optional(),
   })
   .strict();
@@ -231,9 +233,7 @@ export function renderDashboard(
   runtime: DashboardRuntime,
 ): ReactElement {
   const configuration = parseDashboardConfiguration(candidate);
-  const cards = new Map(
-    configuration.cards.map((card) => [card.id, card]),
-  );
+  const cards = new Map(configuration.cards.map((card) => [card.id, card]));
   const wiring = new Map(
     configuration.wiring.map((connection) => [connection.cardId, connection]),
   );

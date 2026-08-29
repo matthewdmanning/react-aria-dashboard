@@ -103,7 +103,11 @@ describe("Settings configuration API contract", () => {
           ],
           wiring: [
             { cardId: "welcome", source: "welcome", formatter: "message" },
-            { cardId: "missing", source: "no-such-source", formatter: "identity" },
+            {
+              cardId: "missing",
+              source: "no-such-source",
+              formatter: "identity",
+            },
           ],
           arrangement: ["welcome", "missing"],
         }),
@@ -117,6 +121,8 @@ describe("Settings configuration API contract", () => {
       dataPath,
     );
 
-    await expect(response.json()).resolves.toEqual({ welcome: { text: "Ready" } });
+    await expect(response.json()).resolves.toEqual({
+      welcome: { text: "Ready" },
+    });
   });
 });
