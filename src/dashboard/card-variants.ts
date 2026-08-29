@@ -1,96 +1,67 @@
-import type { JsonSchema } from "./index";
+import * as z from "zod/v4";
 
 export const cardVariantSchemas = {
-  message: {
-    type: "object",
-    properties: { message: { type: "string" } },
-    required: ["message"],
-    additionalProperties: false,
-  },
-  table: {
-    type: "object",
-    properties: {
-      columns: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { key: { type: "string" }, label: { type: "string" } },
-          required: ["key", "label"],
-          additionalProperties: false,
-        },
-      },
-      rows: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: {
-            anyOf: [{ type: "string" }, { type: "number" }, { type: "null" }],
-          },
-        },
-      },
-    },
-    required: ["columns", "rows"],
-    additionalProperties: false,
-  },
-  list: {
-    type: "object",
-    properties: {
-      items: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            body: { type: "string" },
-          },
-          required: ["id", "title"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["items"],
-    additionalProperties: false,
-  },
-  calendar: {
-    type: "object",
-    properties: {
-      events: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            start: { type: "string" },
-            end: { type: "string" },
-          },
-          required: ["id", "title", "start"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["events"],
-    additionalProperties: false,
-  },
-  chart: {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      summary: { type: "string" },
-      series: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { label: { type: "string" }, value: { type: "number" } },
-          required: ["label", "value"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["title", "summary", "series"],
-    additionalProperties: false,
-  },
-} satisfies Record<string, JsonSchema>;
+  message: z
+    .object({
+      message: z.string(),
+    })
+    .strict(),
+  table: z
+    .object({
+      columns: z.array(
+        z
+          .object({
+            key: z.string(),
+            label: z.string(),
+          })
+          .strict(),
+      ),
+      rows: z.array(
+        z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
+      ),
+    })
+    .strict(),
+  list: z
+    .object({
+      items: z.array(
+        z
+          .object({
+            id: z.string(),
+            title: z.string(),
+            body: z.string().optional(),
+          })
+          .strict(),
+      ),
+    })
+    .strict(),
+  calendar: z
+    .object({
+      events: z.array(
+        z
+          .object({
+            id: z.string(),
+            title: z.string(),
+            start: z.string(),
+            end: z.string().optional(),
+          })
+          .strict(),
+      ),
+    })
+    .strict(),
+  chart: z
+    .object({
+      title: z.string(),
+      summary: z.string(),
+      series: z.array(
+        z
+          .object({
+            label: z.string(),
+            value: z.number(),
+          })
+          .strict(),
+      ),
+    })
+    .strict(),
+};
 
 export type CardVariant = keyof typeof cardVariantSchemas;

@@ -1,6 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import Ajv from "ajv";
 
 import {
   compileFormatterSpec,
@@ -120,13 +119,13 @@ export function createDashboardOperations(
     if (sourceData === undefined) return;
     if (!formatterFunction) return;
     const formatted = formatterFunction(sourceData);
-    const ajv = new Ajv();
-    const validate = ajv.compile(
-      cardVariantSchemas[variant as keyof typeof cardVariantSchemas],
-    );
-    if (!validate(formatted)) {
+    const result =
+      cardVariantSchemas[variant as keyof typeof cardVariantSchemas].safeParse(
+        formatted,
+      );
+    if (!result.success) {
       throw new Error(
-        `Formatted data does not match the '${variant}' card schema: ${ajv.errorsText(validate.errors)}`,
+        `Formatted data does not match the '${variant}' card schema: ${result.error.message}`,
       );
     }
   }

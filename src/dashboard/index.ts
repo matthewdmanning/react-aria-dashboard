@@ -1,10 +1,8 @@
 import { createElement, type ComponentType, type ReactElement } from "react";
 import * as z from "zod/v4";
 
-export type JsonSchema = Record<string, unknown>;
-
 export interface CardDefinition<T = unknown> {
-  schema: JsonSchema;
+  schema: z.ZodType<T>;
   Component: ComponentType<{ data: T }>;
 }
 

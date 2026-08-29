@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
+import * as z from "zod/v4";
 
 import {
   compileFormatterSpec,
@@ -40,11 +41,7 @@ const configuration: DashboardConfiguration = {
 };
 
 const message: CardDefinition<{ message: string }> = {
-  schema: {
-    type: "object",
-    properties: { message: { type: "string" } },
-    required: ["message"],
-  },
+  schema: z.object({ message: z.string() }),
   Component: ({ data }) => createElement("p", null, data.message),
 };
 

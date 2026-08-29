@@ -1,11 +1,10 @@
 import { createElement } from "react";
+import type * as z from "zod/v4";
 
 import type { CardDefinition } from "../../dashboard";
 import { cardVariantSchemas } from "../../dashboard/card-variants";
 
-export interface MessageCardData {
-  message: string;
-}
+export type MessageCardData = z.infer<typeof cardVariantSchemas.message>;
 
 export const messageCard: CardDefinition<MessageCardData> = {
   schema: cardVariantSchemas.message,

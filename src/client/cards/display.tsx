@@ -1,10 +1,9 @@
+import type * as z from "zod/v4";
+
 import type { CardDefinition } from "../../dashboard";
 import { cardVariantSchemas } from "../../dashboard/card-variants";
 
-export interface TableCardData {
-  columns: { key: string; label: string }[];
-  rows: Record<string, string | number | null>[];
-}
+export type TableCardData = z.infer<typeof cardVariantSchemas.table>;
 
 export const tableCard: CardDefinition<TableCardData> = {
   schema: cardVariantSchemas.table,
@@ -32,9 +31,7 @@ export const tableCard: CardDefinition<TableCardData> = {
   ),
 };
 
-export interface ListCardData {
-  items: { id: string; title: string; body?: string }[];
-}
+export type ListCardData = z.infer<typeof cardVariantSchemas.list>;
 
 export const listCard: CardDefinition<ListCardData> = {
   schema: cardVariantSchemas.list,
@@ -52,9 +49,7 @@ export const listCard: CardDefinition<ListCardData> = {
   ),
 };
 
-export interface CalendarCardData {
-  events: { id: string; title: string; start: string; end?: string }[];
-}
+export type CalendarCardData = z.infer<typeof cardVariantSchemas.calendar>;
 
 export const calendarCard: CardDefinition<CalendarCardData> = {
   schema: cardVariantSchemas.calendar,
@@ -75,11 +70,7 @@ export const calendarCard: CardDefinition<CalendarCardData> = {
   ),
 };
 
-export interface ChartCardData {
-  title: string;
-  summary: string;
-  series: { label: string; value: number }[];
-}
+export type ChartCardData = z.infer<typeof cardVariantSchemas.chart>;
 
 export const chartCard: CardDefinition<ChartCardData> = {
   schema: cardVariantSchemas.chart,
