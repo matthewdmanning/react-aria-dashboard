@@ -16,7 +16,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "write" as const,
         data: "write" as const,
-        panels: "none" as const,
+        cards: "none" as const,
       },
     };
     await replaceDashboardConfiguration(configurationPath, configuration);
@@ -66,7 +66,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
-        panels: "none",
+        cards: "none",
       },
     });
     const fetchCalendar = async (url: string) => {
@@ -99,7 +99,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "read",
-        panels: "none",
+        cards: "none",
       },
     });
     await expect(operations.refreshSource("team-calendar")).rejects.toThrow(
@@ -116,7 +116,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
-        panels: "none",
+        cards: "none",
       },
     });
     await writeFile(dataPath, '{"retained":true}\n');
@@ -151,7 +151,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
-        panels: "none",
+        cards: "none",
       },
     });
     await writeFile(dataPath, '{"retained":true}\n');
@@ -176,15 +176,15 @@ describe("dashboard MCP operations contract", () => {
     );
   });
 
-  async function panelWorkspace() {
-    const workspace = await mkdtemp(join(tmpdir(), "panel-mcp-"));
+  async function cardWorkspace() {
+    const workspace = await mkdtemp(join(tmpdir(), "card-mcp-"));
     const configurationPath = join(workspace, "dashboard.json");
     await replaceDashboardConfiguration(configurationPath, {
       ...defaultDashboardConfiguration,
       agentPermissions: {
         configuration: "none",
         data: "none",
-        panels: "write",
+        cards: "write",
       },
     });
     return {
@@ -200,14 +200,14 @@ describe("dashboard MCP operations contract", () => {
     await writeFile(join(dataDir, `${id}.json`), JSON.stringify(data));
   }
 
-  test("adds a panel with identity formatting", async () => {
-    const { workspace, configurationPath, operations } = await panelWorkspace();
+  test("adds a card with identity formatting", async () => {
+    const { workspace, configurationPath, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { message: "72 degrees" });
 
-    await operations.addPanel({
+    await operations.addCard({
       id: "weather",
       title: "Weather",
-      kind: "message",
+      variant: "message",
       source: "weather",
     });
 
@@ -216,70 +216,70 @@ describe("dashboard MCP operations contract", () => {
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      panels: [{ id: "welcome" }, { id: "weather", definition: "message" }],
+      cards: [{ id: "welcome" }, { id: "weather", definition: "message" }],
       wiring: [
-        { panelId: "welcome" },
-        { panelId: "weather", source: "weather", formatter: "identity" },
+        { cardId: "welcome" },
+        { cardId: "weather", source: "weather", formatter: "identity" },
       ],
       arrangement: ["welcome", "weather"],
     });
   });
 
-  test("rejects an unknown panel kind", async () => {
-    const { operations } = await panelWorkspace();
+  test("rejects an unknown card variant", async () => {
+    const { operations } = await cardWorkspace();
     await expect(
-      operations.addPanel({
+      operations.addCard({
         id: "weather",
         title: "Weather",
-        kind: "made-up",
+        variant: "made-up",
         source: "weather",
       }),
-    ).rejects.toThrow("Unknown panel kind 'made-up'");
+    ).rejects.toThrow("Unknown card variant 'made-up'");
   });
 
-  test("rejects add-panel for an id that already exists", async () => {
-    const { workspace, operations } = await panelWorkspace();
+  test("rejects add-card for an id that already exists", async () => {
+    const { workspace, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { message: "72 degrees" });
     const args = {
       id: "weather",
       title: "Weather",
-      kind: "message",
+      variant: "message",
       source: "weather",
     } as const;
-    await operations.addPanel(args);
+    await operations.addCard(args);
 
-    await expect(operations.addPanel(args)).rejects.toThrow(
-      "Panel 'weather' already exists; use edit-panel",
+    await expect(operations.addCard(args)).rejects.toThrow(
+      "Card 'weather' already exists; use edit-card",
     );
   });
 
-  test("rejects edit-panel for an id that does not exist", async () => {
-    const { workspace, operations } = await panelWorkspace();
+  test("rejects edit-card for an id that does not exist", async () => {
+    const { workspace, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { message: "72 degrees" });
     await expect(
-      operations.editPanel({
+      operations.editCard({
         id: "weather",
         title: "Weather",
-        kind: "message",
+        variant: "message",
         source: "weather",
       }),
-    ).rejects.toThrow("Panel 'weather' does not exist; use add-panel");
+    ).rejects.toThrow("Card 'weather' does not exist; use add-card");
   });
 
-  test("edit-panel replaces in place and keeps arrangement position", async () => {
-    const { workspace, configurationPath, operations } = await panelWorkspace();
+  test("edit-card replaces in place and keeps arrangement position", async () => {
+    const { workspace, configurationPath, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { message: "72 degrees" });
-    await operations.addPanel({
+    await operations.addCard({
       id: "weather",
       title: "Weather",
-      kind: "message",
+      variant: "message",
       source: "weather",
     });
 
-    await operations.editPanel({
+    await operations.editCard({
       id: "weather",
       title: "Weather (updated)",
-      kind: "message",
+      variant: "message",
       source: "weather",
     });
 
@@ -288,63 +288,63 @@ describe("dashboard MCP operations contract", () => {
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      panels: [{ id: "welcome" }, { id: "weather", title: "Weather (updated)" }],
+      cards: [{ id: "welcome" }, { id: "weather", title: "Weather (updated)" }],
       arrangement: ["welcome", "weather"],
     });
   });
 
-  test("removes a panel and prunes its wiring and arrangement", async () => {
-    const { workspace, configurationPath, operations } = await panelWorkspace();
+  test("removes a card and prunes its wiring and arrangement", async () => {
+    const { workspace, configurationPath, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { message: "72 degrees" });
-    await operations.addPanel({
+    await operations.addCard({
       id: "weather",
       title: "Weather",
-      kind: "message",
+      variant: "message",
       source: "weather",
     });
 
-    await operations.removePanel("weather");
+    await operations.removeCard("weather");
 
     await expect(
       readFile(configurationPath, "utf8").then((contents) =>
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      panels: [{ id: "welcome" }],
-      wiring: [{ panelId: "welcome" }],
+      cards: [{ id: "welcome" }],
+      wiring: [{ cardId: "welcome" }],
       arrangement: ["welcome"],
     });
   });
 
-  test("rejects a formatterSpec whose output doesn't match the kind schema", async () => {
-    const { workspace, operations } = await panelWorkspace();
+  test("rejects a formatterSpec whose output doesn't match the variant schema", async () => {
+    const { workspace, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { tempF: 72 });
 
     await expect(
-      operations.addPanel({
+      operations.addCard({
         id: "weather",
         title: "Weather",
-        kind: "message",
+        variant: "message",
         source: "weather",
         formatterSpec: {
-          kind: "object",
+          shape: "object",
           fields: { wrongField: { from: ["tempF"], coerce: "string" } },
         },
       }),
-    ).rejects.toThrow("does not match the 'message' panel schema");
+    ).rejects.toThrow("does not match the 'message' card schema");
   });
 
-  test("accepts a formatterSpec that reshapes source data to match the kind schema", async () => {
-    const { workspace, configurationPath, operations } = await panelWorkspace();
+  test("accepts a formatterSpec that reshapes source data to match the variant schema", async () => {
+    const { workspace, configurationPath, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { tempF: 72 });
 
-    await operations.addPanel({
+    await operations.addCard({
       id: "weather",
       title: "Weather",
-      kind: "message",
+      variant: "message",
       source: "weather",
       formatterSpec: {
-        kind: "object",
+        shape: "object",
         fields: { message: { from: ["tempF"], coerce: "string" } },
       },
     });
@@ -354,23 +354,23 @@ describe("dashboard MCP operations contract", () => {
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      wiring: [{ panelId: "welcome" }, { panelId: "weather", formatter: "weather" }],
+      wiring: [{ cardId: "welcome" }, { cardId: "weather", formatter: "weather" }],
       formatterSpecs: {
         weather: {
-          kind: "object",
+          shape: "object",
           fields: { message: { from: ["tempF"], coerce: "string" } },
         },
       },
     });
   });
 
-  test("allows adding a panel when source data has never been written", async () => {
-    const { operations } = await panelWorkspace();
+  test("allows adding a card when source data has never been written", async () => {
+    const { operations } = await cardWorkspace();
     await expect(
-      operations.addPanel({
+      operations.addCard({
         id: "weather",
         title: "Weather",
-        kind: "message",
+        variant: "message",
         source: "weather",
       }),
     ).resolves.toBeUndefined();

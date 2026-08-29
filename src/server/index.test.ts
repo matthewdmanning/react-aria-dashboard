@@ -97,13 +97,13 @@ describe("Settings configuration API contract", () => {
         method: "PUT",
         body: JSON.stringify({
           ...defaultDashboardConfiguration,
-          panels: [
+          cards: [
             { id: "welcome", title: "Dashboard", definition: "message" },
             { id: "missing", title: "Missing", definition: "message" },
           ],
           wiring: [
-            { panelId: "welcome", source: "welcome", formatter: "message" },
-            { panelId: "missing", source: "no-such-source", formatter: "identity" },
+            { cardId: "welcome", source: "welcome", formatter: "message" },
+            { cardId: "missing", source: "no-such-source", formatter: "identity" },
           ],
           arrangement: ["welcome", "missing"],
         }),

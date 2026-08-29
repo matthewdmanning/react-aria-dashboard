@@ -3,7 +3,7 @@ import * as z from "zod/v4";
 
 export type JsonSchema = Record<string, unknown>;
 
-export interface PanelDefinition<T = unknown> {
+export interface CardDefinition<T = unknown> {
   schema: JsonSchema;
   Component: ComponentType<{ data: T }>;
 }
@@ -18,16 +18,16 @@ const fieldSpecSchema = z
   })
   .strict();
 
-export const formatterSpecSchema = z.discriminatedUnion("kind", [
+export const formatterSpecSchema = z.discriminatedUnion("shape", [
   z
     .object({
-      kind: z.literal("object"),
+      shape: z.literal("object"),
       fields: z.record(z.string(), fieldSpecSchema),
     })
     .strict(),
   z
     .object({
-      kind: z.literal("array"),
+      shape: z.literal("array"),
       from: z.array(z.string().min(1)).min(1),
       into: z.string().min(1),
       fields: z.record(z.string(), fieldSpecSchema),
@@ -58,10 +58,10 @@ const dashboardConfigurationSchema = z
       .object({
         configuration: z.enum(["none", "read", "write"]),
         data: z.enum(["none", "read", "write"]),
-        panels: z.enum(["none", "read", "write"]).default("none"),
+        cards: z.enum(["none", "read", "write"]).default("none"),
       })
       .strict(),
-    panels: z.array(
+    cards: z.array(
       z
         .object({
           id: z.string().min(1),
@@ -73,7 +73,7 @@ const dashboardConfigurationSchema = z
     wiring: z.array(
       z
         .object({
-          panelId: z.string().min(1),
+          cardId: z.string().min(1),
           source: z.string().min(1),
           formatter: z.string().min(1),
         })
@@ -96,10 +96,10 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "read",
     data: "none",
-    panels: "none",
+    cards: "none",
   },
-  panels: [{ id: "welcome", title: "Dashboard", definition: "message" }],
-  wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
+  cards: [{ id: "welcome", title: "Dashboard", definition: "message" }],
+  wiring: [{ cardId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
   formatterSpecs: {},
 };
@@ -119,21 +119,21 @@ export function parseDashboardConfiguration(
       "Invalid dashboard configuration: integration credentials are not allowed",
     );
   }
-  const panelIds = new Set(configuration.panels.map(({ id }) => id));
-  const wiredIds = new Set(configuration.wiring.map(({ panelId }) => panelId));
+  const cardIds = new Set(configuration.cards.map(({ id }) => id));
+  const wiredIds = new Set(configuration.wiring.map(({ cardId }) => cardId));
   const arrangedIds = new Set(configuration.arrangement);
 
   if (
-    panelIds.size !== configuration.panels.length ||
+    cardIds.size !== configuration.cards.length ||
     wiredIds.size !== configuration.wiring.length ||
     arrangedIds.size !== configuration.arrangement.length ||
-    configuration.panels.length !== configuration.wiring.length ||
-    configuration.panels.length !== configuration.arrangement.length ||
-    configuration.wiring.some(({ panelId }) => !panelIds.has(panelId)) ||
-    configuration.arrangement.some((panelId) => !panelIds.has(panelId))
+    configuration.cards.length !== configuration.wiring.length ||
+    configuration.cards.length !== configuration.arrangement.length ||
+    configuration.wiring.some(({ cardId }) => !cardIds.has(cardId)) ||
+    configuration.arrangement.some((cardId) => !cardIds.has(cardId))
   ) {
     throw new Error(
-      "Invalid dashboard configuration: panel wiring is incomplete",
+      "Invalid dashboard configuration: card wiring is incomplete",
     );
   }
 
@@ -202,7 +202,7 @@ function applyFields(
 export function compileFormatterSpec(
   spec: FormatterSpec,
 ): (source: unknown) => unknown {
-  if (spec.kind === "object") {
+  if (spec.shape === "object") {
     return (source) => applyFields(source, spec.fields);
   }
   return (source) => {
@@ -221,7 +221,7 @@ export function compileFormatterSpec(
 }
 
 export interface DashboardRuntime {
-  panelDefinitions: Record<string, PanelDefinition<any>>;
+  cardDefinitions: Record<string, CardDefinition<any>>;
   sources: Record<string, unknown>;
   formatters: Record<string, (source: unknown) => unknown>;
 }
@@ -231,11 +231,11 @@ export function renderDashboard(
   runtime: DashboardRuntime,
 ): ReactElement {
   const configuration = parseDashboardConfiguration(candidate);
-  const panels = new Map(
-    configuration.panels.map((panel) => [panel.id, panel]),
+  const cards = new Map(
+    configuration.cards.map((card) => [card.id, card]),
   );
   const wiring = new Map(
-    configuration.wiring.map((connection) => [connection.panelId, connection]),
+    configuration.wiring.map((connection) => [connection.cardId, connection]),
   );
 
   return createElement(
@@ -244,10 +244,10 @@ export function renderDashboard(
       "data-theme": configuration.theme,
       style: { fontSize: `${configuration.fontScale}rem` },
     },
-    ...configuration.arrangement.map((panelId) => {
-      const panel = panels.get(panelId)!;
-      const connection = wiring.get(panelId)!;
-      const definition = runtime.panelDefinitions[panel.definition];
+    ...configuration.arrangement.map((cardId) => {
+      const card = cards.get(cardId)!;
+      const connection = wiring.get(cardId)!;
+      const definition = runtime.cardDefinitions[card.definition];
       const formatter = runtime.formatters[connection.formatter];
 
       if (
@@ -256,15 +256,15 @@ export function renderDashboard(
         !(connection.source in runtime.sources)
       ) {
         throw new Error(
-          `Dashboard runtime is missing wiring for panel: ${panelId}`,
+          `Dashboard runtime is missing wiring for card: ${cardId}`,
         );
       }
 
       const data = formatter(runtime.sources[connection.source]);
       return createElement(
         "section",
-        { key: panelId },
-        createElement("h2", null, panel.title),
+        { key: cardId },
+        createElement("h2", null, card.title),
         createElement(definition.Component, { data }),
       );
     }),

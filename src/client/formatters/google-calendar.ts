@@ -1,4 +1,4 @@
-import type { CalendarPanelData } from "../panels/display";
+import type { CalendarCardData } from "../cards/display";
 
 interface GoogleCalendarEvent {
   id?: unknown;
@@ -7,7 +7,7 @@ interface GoogleCalendarEvent {
   end?: { dateTime?: unknown; date?: unknown };
 }
 
-export function formatGoogleCalendar(source: unknown): CalendarPanelData {
+export function formatGoogleCalendar(source: unknown): CalendarCardData {
   const items =
     source &&
     typeof source === "object" &&

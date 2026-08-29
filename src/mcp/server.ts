@@ -9,10 +9,10 @@ import {
   type DashboardMcpPaths,
 } from "./operations";
 
-const panelArgsSchema = z.object({
+const cardArgsSchema = z.object({
   id: z.string(),
   title: z.string(),
-  kind: z.string(),
+  variant: z.string(),
   source: z.string(),
   formatter: z.string().optional(),
   formatterSpec: formatterSpecSchema.optional(),
@@ -44,38 +44,38 @@ export function createDashboardMcpServer(
   });
 
   server.registerTool(
-    "add-panel",
+    "add-card",
     {
       description:
-        "Add a new panel: pick a kind, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
-      inputSchema: panelArgsSchema,
+        "Add a new card: pick a variant, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
+      inputSchema: cardArgsSchema,
     },
     async (args) => {
-      await operations.addPanel(args);
-      return result("Panel added");
+      await operations.addCard(args);
+      return result("Card added");
     },
   );
   server.registerTool(
-    "edit-panel",
+    "edit-card",
     {
-      description: "Replace an existing panel's kind, source, and formatter.",
-      inputSchema: panelArgsSchema,
+      description: "Replace an existing card's variant, source, and formatter.",
+      inputSchema: cardArgsSchema,
     },
     async (args) => {
-      await operations.editPanel(args);
-      return result("Panel edited");
+      await operations.editCard(args);
+      return result("Card edited");
     },
   );
   server.registerTool(
-    "remove-panel",
+    "remove-card",
     {
       description:
-        "Delete a panel and prune its dashboard wiring and arrangement.",
+        "Delete a card and prune its dashboard wiring and arrangement.",
       inputSchema: z.object({ id: z.string() }),
     },
     async ({ id }) => {
-      await operations.removePanel(id);
-      return result("Panel removed");
+      await operations.removeCard(id);
+      return result("Card removed");
     },
   );
 

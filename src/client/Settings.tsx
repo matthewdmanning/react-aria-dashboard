@@ -135,7 +135,7 @@ export function Settings({
       </fieldset>
       <fieldset>
         <legend>Agent permissions</legend>
-        {(["configuration", "data", "panels"] as const).map((permission) => (
+        {(["configuration", "data", "cards"] as const).map((permission) => (
           <label key={permission}>
             {permission}
             <select

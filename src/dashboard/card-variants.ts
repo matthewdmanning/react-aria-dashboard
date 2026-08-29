@@ -1,6 +1,6 @@
 import type { JsonSchema } from "./index";
 
-export const panelKindSchemas = {
+export const cardVariantSchemas = {
   message: {
     type: "object",
     properties: { message: { type: "string" } },
@@ -32,7 +32,7 @@ export const panelKindSchemas = {
     required: ["columns", "rows"],
     additionalProperties: false,
   },
-  cards: {
+  list: {
     type: "object",
     properties: {
       items: {
@@ -93,4 +93,4 @@ export const panelKindSchemas = {
   },
 } satisfies Record<string, JsonSchema>;
 
-export type PanelKind = keyof typeof panelKindSchemas;
+export type CardVariant = keyof typeof cardVariantSchemas;

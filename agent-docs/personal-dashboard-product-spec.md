@@ -31,7 +31,7 @@ The implementation is not constrained to a single static HTML file. A broader we
 - Keep content available as a local JSON file, so local AI tools can use it as context.
 - Allow optional connections to external services and optional cloud storage.
 - Support included and third-party themes.
-- Allow agents to create or change panels, their UIs, JSON Schemas, formatter code, data wiring, and arrangement in response to user prompts.
+- Allow agents to create or change cards, their UIs, JSON Schemas, formatter code, data wiring, and arrangement in response to user prompts.
 - Allow interaction with AI agents through dashboard state-management tools, including an MCP interface.
 
 ## First-release completion boundary
@@ -39,8 +39,8 @@ The implementation is not constrained to a single static HTML file. A broader we
 The first release is not complete until it includes all of the following:
 
 - Local persistence through the backend.
-- Agent-created or agent-changed panels composed of a UI and JSON Schema.
-- Persistent dashboard configuration for integrations, the selected UI theme, font scaling, agent permissions, panels, wiring, and arrangement.
+- Agent-created or agent-changed cards composed of a UI and JSON Schema.
+- Persistent dashboard configuration for integrations, the selected UI theme, font scaling, agent permissions, cards, wiring, and arrangement.
 - A Settings interface for directly managing integrations, themes, font scaling, and agent permissions without an agent.
 - Agent interaction governed by permissions configured in Settings.
 - Agentic tools, including an MCP interface, for inspecting and updating dashboard state.
@@ -67,26 +67,26 @@ These capabilities may be built sequentially.
 
 ## Dashboard configuration and Settings
 
-- Dashboard configuration persistently records integrations, the selected UI theme, font scaling, agent permissions, panels, panel wiring, and panel arrangement.
-- Dashboard configuration does not define one universal structure for panel data, relationships, UI code, JSON Schemas, or formatter code.
+- Dashboard configuration persistently records integrations, the selected UI theme, font scaling, agent permissions, cards, card wiring, and card arrangement.
+- Dashboard configuration does not define one universal structure for card data, relationships, UI code, JSON Schemas, or formatter code.
 - Settings is the sole interface for adding, changing, and removing external-service integrations.
 - Settings is the sole interface for adding, changing, removing, and selecting themes.
 - Settings is the sole interface for changing font scaling.
 - Settings is the interface for changing agent permissions.
-- Settings does not create or edit panels, formatter code, panel wiring, or panel arrangement.
+- Settings does not create or edit cards, formatter code, card wiring, or card arrangement.
 - Settings changes persist through the dashboard-configuration persistence interface.
 - Credentials and tokens are not stored in dashboard data.
 - Whether Settings may change authentication configuration remains open.
 
-## Panels and data wiring
+## Cards and data wiring
 
-- A dashboard specifies the arrangement or ordering of panels on a page or display.
-- A panel is an independent unit composed of a UI and a JSON Schema.
-- The UI can render any properly formatted data that fits the panel's JSON Schema.
-- A panel only displays properly formatted data.
-- Formatter code is separate from the panel, even when only one panel uses it.
-- A formatter may extract or reformat source data, including removing fields that the panel does not need.
-- The agent creates and maintains the wiring between source data, formatter code, the panel's JSON Schema, and the panel UI.
+- A dashboard specifies the arrangement or ordering of cards on a page or display.
+- A card is an independent unit composed of a UI and a JSON Schema.
+- The UI can render any properly formatted data that fits the card's JSON Schema.
+- A card only displays properly formatted data.
+- Formatter code is separate from the card, even when only one card uses it.
+- A formatter may extract or reformat source data, including removing fields that the card does not need.
+- The agent creates and maintains the wiring between source data, formatter code, the card's JSON Schema, and the card UI.
 - The agent is responsible for ensuring the formatted data fits the schema and that the UI can render it.
 - Project-level validation or preview of formatter output is out of scope.
 
@@ -108,7 +108,7 @@ These capabilities may be built sequentially.
 - Prioritization and focus are core product outcomes, not presentation-only enhancements.
 - The dashboard is one page; prioritization happens within the dashboard rather than on a separate landing or focus page.
 - Default components, included themes, and dashboard functionality must provide ways to emphasize high-impact items and reduce visual clutter.
-- Panels and themes must be able to preserve a clear distinction between important items and supporting information.
+- Cards and themes must be able to preserve a clear distinction between important items and supporting information.
 - The primary interaction modes are tablet touch and mouse input.
 - Interactive targets, gestures, menus, selection, reordering, and editing must work with both touch and mouse.
 - Keyboard and assistive-technology access remain required accessibility basics.

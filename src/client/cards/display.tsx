@@ -1,13 +1,13 @@
-import type { PanelDefinition } from "../../dashboard";
-import { panelKindSchemas } from "../../dashboard/panel-kinds";
+import type { CardDefinition } from "../../dashboard";
+import { cardVariantSchemas } from "../../dashboard/card-variants";
 
-export interface TablePanelData {
+export interface TableCardData {
   columns: { key: string; label: string }[];
   rows: Record<string, string | number | null>[];
 }
 
-export const tablePanel: PanelDefinition<TablePanelData> = {
-  schema: panelKindSchemas.table,
+export const tableCard: CardDefinition<TableCardData> = {
+  schema: cardVariantSchemas.table,
   Component: ({ data }) => (
     <table>
       <thead>
@@ -32,12 +32,12 @@ export const tablePanel: PanelDefinition<TablePanelData> = {
   ),
 };
 
-export interface CardsPanelData {
+export interface ListCardData {
   items: { id: string; title: string; body?: string }[];
 }
 
-export const cardsPanel: PanelDefinition<CardsPanelData> = {
-  schema: panelKindSchemas.cards,
+export const listCard: CardDefinition<ListCardData> = {
+  schema: cardVariantSchemas.list,
   Component: ({ data }) => (
     <ul>
       {data.items.map(({ id, title, body }) => (
@@ -52,12 +52,12 @@ export const cardsPanel: PanelDefinition<CardsPanelData> = {
   ),
 };
 
-export interface CalendarPanelData {
+export interface CalendarCardData {
   events: { id: string; title: string; start: string; end?: string }[];
 }
 
-export const calendarPanel: PanelDefinition<CalendarPanelData> = {
-  schema: panelKindSchemas.calendar,
+export const calendarCard: CardDefinition<CalendarCardData> = {
+  schema: cardVariantSchemas.calendar,
   Component: ({ data }) => (
     <ul>
       {data.events.map(({ id, title, start, end }) => (
@@ -75,14 +75,14 @@ export const calendarPanel: PanelDefinition<CalendarPanelData> = {
   ),
 };
 
-export interface ChartPanelData {
+export interface ChartCardData {
   title: string;
   summary: string;
   series: { label: string; value: number }[];
 }
 
-export const chartPanel: PanelDefinition<ChartPanelData> = {
-  schema: panelKindSchemas.chart,
+export const chartCard: CardDefinition<ChartCardData> = {
+  schema: cardVariantSchemas.chart,
   Component: ({ data }) => {
     const maximum = Math.max(1, ...data.series.map(({ value }) => value));
     return (

@@ -10,7 +10,7 @@ import {
   type DashboardConfiguration,
   type FormatterSpec,
 } from "../dashboard";
-import { panelKindSchemas } from "../dashboard/panel-kinds";
+import { cardVariantSchemas } from "../dashboard/card-variants";
 import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,
@@ -31,10 +31,10 @@ export interface DashboardMcpPaths {
   calendarDataPath?: string;
 }
 
-export interface PanelArgs {
+export interface CardArgs {
   id: string;
   title: string;
-  kind: string;
+  variant: string;
   source: string;
   formatter?: string;
   formatterSpec?: FormatterSpec;
@@ -84,11 +84,11 @@ export function createDashboardOperations(
     }
   }
 
-  function requirePanelsAccess(
+  function requireCardsAccess(
     configuration: DashboardConfiguration,
     operation: "read" | "write",
   ) {
-    requireAccess(configuration.agentPermissions.panels, operation);
+    requireAccess(configuration.agentPermissions.cards, operation);
   }
 
   async function readSourceData(sourceId: string): Promise<unknown> {
@@ -111,8 +111,8 @@ export function createDashboardOperations(
     return spec ? compileFormatterSpec(spec) : undefined;
   }
 
-  async function validateAgainstKind(
-    kind: string,
+  async function validateAgainstVariant(
+    variant: string,
     source: string,
     formatterFunction: ((source: unknown) => unknown) | undefined,
   ) {
@@ -121,33 +121,35 @@ export function createDashboardOperations(
     if (!formatterFunction) return;
     const formatted = formatterFunction(sourceData);
     const ajv = new Ajv();
-    const validate = ajv.compile(panelKindSchemas[kind as keyof typeof panelKindSchemas]);
+    const validate = ajv.compile(
+      cardVariantSchemas[variant as keyof typeof cardVariantSchemas],
+    );
     if (!validate(formatted)) {
       throw new Error(
-        `Formatted data does not match the '${kind}' panel schema: ${ajv.errorsText(validate.errors)}`,
+        `Formatted data does not match the '${variant}' card schema: ${ajv.errorsText(validate.errors)}`,
       );
     }
   }
 
-  async function upsertPanel(
-    args: PanelArgs,
+  async function upsertCard(
+    args: CardArgs,
     mode: "add" | "edit",
   ): Promise<void> {
     const configuration = await readConfiguration();
-    requirePanelsAccess(configuration, "write");
+    requireCardsAccess(configuration, "write");
 
-    if (!(args.kind in panelKindSchemas)) {
-      throw new Error(`Unknown panel kind '${args.kind}'`);
+    if (!(args.variant in cardVariantSchemas)) {
+      throw new Error(`Unknown card variant '${args.variant}'`);
     }
 
-    const alreadyExists = configuration.panels.some(
-      (panel) => panel.id === args.id,
+    const alreadyExists = configuration.cards.some(
+      (card) => card.id === args.id,
     );
     if (mode === "add" && alreadyExists) {
-      throw new Error(`Panel '${args.id}' already exists; use edit-panel`);
+      throw new Error(`Card '${args.id}' already exists; use edit-card`);
     }
     if (mode === "edit" && !alreadyExists) {
-      throw new Error(`Panel '${args.id}' does not exist; use add-panel`);
+      throw new Error(`Card '${args.id}' does not exist; use add-card`);
     }
 
     const formatterSpecs = { ...configuration.formatterSpecs };
@@ -156,15 +158,15 @@ export function createDashboardOperations(
       : (args.formatter ?? "identity");
     if (args.formatterSpec) formatterSpecs[formatterKey] = args.formatterSpec;
 
-    await validateAgainstKind(
-      args.kind,
+    await validateAgainstVariant(
+      args.variant,
       args.source,
       resolveFormatterFunction(formatterKey, formatterSpecs),
     );
 
-    const panelEntry = { id: args.id, title: args.title, definition: args.kind };
+    const cardEntry = { id: args.id, title: args.title, definition: args.variant };
     const wiringEntry = {
-      panelId: args.id,
+      cardId: args.id,
       source: args.source,
       formatter: formatterKey,
     };
@@ -173,18 +175,18 @@ export function createDashboardOperations(
       mode === "add"
         ? {
             ...configuration,
-            panels: [...configuration.panels, panelEntry],
+            cards: [...configuration.cards, cardEntry],
             wiring: [...configuration.wiring, wiringEntry],
             arrangement: [...configuration.arrangement, args.id],
             formatterSpecs,
           }
         : {
             ...configuration,
-            panels: configuration.panels.map((panel) =>
-              panel.id === args.id ? panelEntry : panel,
+            cards: configuration.cards.map((card) =>
+              card.id === args.id ? cardEntry : card,
             ),
             wiring: configuration.wiring.map((wiring) =>
-              wiring.panelId === args.id ? wiringEntry : wiring,
+              wiring.cardId === args.id ? wiringEntry : wiring,
             ),
             formatterSpecs,
           };
@@ -194,26 +196,26 @@ export function createDashboardOperations(
   }
 
   return {
-    async addPanel(args: PanelArgs): Promise<void> {
-      await upsertPanel(args, "add");
+    async addCard(args: CardArgs): Promise<void> {
+      await upsertCard(args, "add");
     },
 
-    async editPanel(args: PanelArgs): Promise<void> {
-      await upsertPanel(args, "edit");
+    async editCard(args: CardArgs): Promise<void> {
+      await upsertCard(args, "edit");
     },
 
-    async removePanel(id: string): Promise<void> {
+    async removeCard(id: string): Promise<void> {
       const configuration = await readConfiguration();
-      requirePanelsAccess(configuration, "write");
-      if (!configuration.panels.some((panel) => panel.id === id)) {
-        throw new Error(`Panel '${id}' does not exist`);
+      requireCardsAccess(configuration, "write");
+      if (!configuration.cards.some((card) => card.id === id)) {
+        throw new Error(`Card '${id}' does not exist`);
       }
 
       const removedFormatter = configuration.wiring.find(
-        (wiring) => wiring.panelId === id,
+        (wiring) => wiring.cardId === id,
       )?.formatter;
       const remainingWiring = configuration.wiring.filter(
-        (wiring) => wiring.panelId !== id,
+        (wiring) => wiring.cardId !== id,
       );
       const formatterStillUsed = remainingWiring.some(
         (wiring) => wiring.formatter === removedFormatter,
@@ -225,10 +227,10 @@ export function createDashboardOperations(
 
       await replaceDashboardConfiguration(configurationPath, {
         ...configuration,
-        panels: configuration.panels.filter((panel) => panel.id !== id),
+        cards: configuration.cards.filter((card) => card.id !== id),
         wiring: remainingWiring,
         arrangement: configuration.arrangement.filter(
-          (panelId) => panelId !== id,
+          (cardId) => cardId !== id,
         ),
         formatterSpecs,
       });

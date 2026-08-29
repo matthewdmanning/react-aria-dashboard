@@ -16,7 +16,7 @@ import {
 } from "./google-calendar-client";
 import { formatIdentity } from "./formatters/identity";
 import { formatMessage } from "./formatters/message";
-import { includedPanelDefinitions } from "./panels";
+import { includedCardDefinitions } from "./cards";
 import { saveDashboardSettings, Settings } from "./Settings";
 import { formatGoogleCalendar } from "./formatters/google-calendar";
 
@@ -57,7 +57,7 @@ export function App() {
   return (
     <>
       {renderDashboard(configuration, {
-        panelDefinitions: includedPanelDefinitions,
+        cardDefinitions: includedCardDefinitions,
         sources: { ...sources, "google-calendar": calendarSource },
         formatters,
       })}
