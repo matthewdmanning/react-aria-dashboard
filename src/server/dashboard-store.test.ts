@@ -14,7 +14,7 @@ const configuration: DashboardConfiguration = {
   integrations: [],
   theme: "calm",
   fontScale: 1,
-  agentPermissions: { configuration: "read", data: "none" },
+  agentPermissions: { configuration: "read", data: "none", panels: "none" },
   panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],

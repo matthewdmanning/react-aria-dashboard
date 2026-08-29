@@ -28,6 +28,7 @@ const dashboardConfigurationSchema = z
       .object({
         configuration: z.enum(["none", "read", "write"]),
         data: z.enum(["none", "read", "write"]),
+        panels: z.enum(["none", "read", "write"]).default("none"),
       })
       .strict(),
     panels: z.array(
@@ -64,6 +65,7 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "read",
     data: "none",
+    panels: "none",
   },
   panels: [{ id: "welcome", title: "Dashboard", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],

@@ -23,6 +23,7 @@ const configuration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "write",
     data: "write",
+    panels: "none",
   },
   panels: [
     { id: "first", title: "First", definition: "message" },

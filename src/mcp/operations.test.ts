@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -8,7 +8,7 @@ import { replaceDashboardConfiguration } from "../server/dashboard-store";
 import { createDashboardOperations } from "./operations";
 
 describe("dashboard MCP operations contract", () => {
-  test("performs permission-governed configuration and artifact work", async () => {
+  test("performs permission-governed settings and data-file work", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "dashboard-mcp-"));
     const configurationPath = join(workspace, "dashboard.json");
     const configuration = {
@@ -16,29 +16,30 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "write" as const,
         data: "write" as const,
+        panels: "none" as const,
       },
     };
     await replaceDashboardConfiguration(configurationPath, configuration);
     const operations = createDashboardOperations(workspace);
 
-    await expect(operations.inspectConfiguration()).resolves.toEqual(
+    await expect(operations.readDashboardSettings()).resolves.toEqual(
       configuration,
     );
-    await operations.replaceConfiguration({
+    await operations.editDashboardSettings({
       ...configuration,
       theme: "contrast",
     });
-    await operations.writeArtifact(
-      "panels/weather.tsx",
-      "export const weather = true;\n",
+    await operations.editDataFile(
+      "weather.json",
+      '{"temperature":72}\n',
     );
 
-    await expect(operations.readArtifact("panels/weather.tsx")).resolves.toBe(
-      "export const weather = true;\n",
+    await expect(operations.readDataFile("weather.json")).resolves.toBe(
+      '{"temperature":72}\n',
     );
     await expect(
-      operations.writeArtifact("../outside.txt", "no"),
-    ).rejects.toThrow("workspace");
+      operations.editDataFile("../outside.txt", "no"),
+    ).rejects.toThrow("data directory");
     expect(JSON.parse(await readFile(configurationPath, "utf8"))).toMatchObject(
       {
         theme: "contrast",
@@ -68,6 +69,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
+        panels: "none",
       },
     });
     const fetchCalendar = async (url: string) => {
@@ -100,6 +102,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "read",
+        panels: "none",
       },
     });
     await expect(operations.refreshSource("team-calendar")).rejects.toThrow(
@@ -116,6 +119,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
+        panels: "none",
       },
     });
     await writeFile(dataPath, '{"retained":true}\n');
@@ -150,6 +154,7 @@ describe("dashboard MCP operations contract", () => {
       agentPermissions: {
         configuration: "none",
         data: "write",
+        panels: "none",
       },
     });
     await writeFile(dataPath, '{"retained":true}\n');
@@ -174,53 +179,189 @@ describe("dashboard MCP operations contract", () => {
     );
   });
 
-  test("previews and then applies an approved panel package", async () => {
+  async function panelWorkspace() {
     const workspace = await mkdtemp(join(tmpdir(), "panel-mcp-"));
     const configurationPath = join(workspace, "dashboard.json");
     await replaceDashboardConfiguration(configurationPath, {
       ...defaultDashboardConfiguration,
       agentPermissions: {
-        configuration: "write",
-        data: "write",
+        configuration: "none",
+        data: "none",
+        panels: "write",
       },
     });
-    const operations = createDashboardOperations(workspace);
-    const files = {
-      manifest: {
-        id: "weather-panel",
-        title: "Weather",
-        schema: "schema.json",
-        component: "panel.tsx",
-        sources: ["weather"],
-      },
-      schema: JSON.stringify({
-        type: "object",
-        properties: { temperature: { type: "number" } },
-        required: ["temperature"],
-      }),
-      component: "export function Panel({ data }) { return data.temperature; }",
+    return {
+      workspace,
+      configurationPath,
+      operations: createDashboardOperations(workspace),
     };
+  }
 
-    await expect(operations.previewPanelPackage(files)).resolves.toEqual({
-      id: "weather-panel",
-      title: "Weather",
-      preview: true,
-    });
-    await expect(
-      readFile(join(workspace, "panels", "weather-panel", "panel.json")),
-    ).rejects.toThrow();
+  const schema = JSON.stringify({
+    type: "object",
+    properties: { temperature: { type: "number" } },
+    required: ["temperature"],
+  });
+  const component =
+    "export function Panel({ data }) { return data.temperature; }";
 
-    await operations.applyPanelPackage(files);
+  test("drafts a panel step by step, then adds it", async () => {
+    const { workspace, configurationPath, operations } =
+      await panelWorkspace();
+
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await operations.addPanel("weather");
+
     await expect(
-      readFile(join(workspace, "panels", "weather-panel", "panel.tsx"), "utf8"),
-    ).resolves.toBe(files.component);
+      readFile(join(workspace, "panels", "weather", "panel.tsx"), "utf8"),
+    ).resolves.toBe(component);
     await expect(
       readFile(configurationPath, "utf8").then((contents) =>
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      panels: [{ id: "welcome" }, { id: "weather-panel" }],
-      wiring: [{ panelId: "welcome" }, { panelId: "weather-panel" }],
+      panels: [{ id: "welcome" }, { id: "weather" }],
+      wiring: [{ panelId: "welcome" }, { panelId: "weather" }],
+      arrangement: ["welcome", "weather"],
     });
+  });
+
+  test("rejects add-panel without a matching draft", async () => {
+    const { operations } = await panelWorkspace();
+    await expect(operations.addPanel("weather")).rejects.toThrow(
+      "No draft found for panel 'weather'",
+    );
+  });
+
+  test("rejects draft-component before draft-schema", async () => {
+    const { operations } = await panelWorkspace();
+    await expect(
+      operations.draftComponent("weather", component),
+    ).rejects.toThrow("draft-component requires draft-schema first");
+  });
+
+  test("rejects add-panel for an id that already exists", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await operations.addPanel("weather");
+
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await expect(operations.addPanel("weather")).rejects.toThrow(
+      "Panel 'weather' already exists; use edit-panel",
+    );
+  });
+
+  test("rejects edit-panel for an id that does not exist", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await expect(operations.editPanel("weather")).rejects.toThrow(
+      "Panel 'weather' does not exist; use add-panel",
+    );
+  });
+
+  test("edit-panel replaces in place and can persist after a single draft step", async () => {
+    const { workspace, configurationPath, operations } =
+      await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await operations.addPanel("weather");
+
+    const updatedComponent =
+      "export function Panel({ data }) { return `${data.temperature}F`; }";
+    await operations.draftComponent("weather", updatedComponent);
+    await operations.editPanel("weather");
+
+    await expect(
+      readFile(join(workspace, "panels", "weather", "panel.tsx"), "utf8"),
+    ).resolves.toBe(updatedComponent);
+    await expect(
+      readFile(join(workspace, "panels", "weather", "schema.json"), "utf8"),
+    ).resolves.toContain("temperature");
+    await expect(
+      readFile(configurationPath, "utf8").then((contents) =>
+        JSON.parse(contents),
+      ),
+    ).resolves.toMatchObject({
+      panels: [{ id: "welcome" }, { id: "weather" }],
+      arrangement: ["welcome", "weather"],
+    });
+  });
+
+  test("removes a panel and prunes its wiring and arrangement", async () => {
+    const { workspace, configurationPath, operations } =
+      await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await operations.addPanel("weather");
+
+    await operations.removePanel("weather");
+
+    await expect(
+      readFile(join(workspace, "panels", "weather", "panel.tsx"), "utf8"),
+    ).rejects.toThrow();
+    await expect(
+      readFile(configurationPath, "utf8").then((contents) =>
+        JSON.parse(contents),
+      ),
+    ).resolves.toMatchObject({
+      panels: [{ id: "welcome" }],
+      wiring: [{ panelId: "welcome" }],
+      arrangement: ["welcome"],
+    });
+  });
+
+  test("rejects a raw HTML element React Aria Components already covers", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await expect(
+      operations.draftComponent(
+        "weather",
+        "export function Panel() { return <button>Go</button>; }",
+      ),
+    ).rejects.toThrow("Use React Aria Components' <Button>");
+  });
+
+  test("rejects inline style and literal color/size values", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await expect(
+      operations.draftComponent(
+        "weather",
+        "export function Panel() { return <div style={{ color: 'red' }} />; }",
+      ),
+    ).rejects.toThrow("theme tokens");
+    await expect(
+      operations.draftComponent(
+        "weather",
+        "export function Panel() { return <div className=\"#ff0000\" />; }",
+      ),
+    ).rejects.toThrow("theme tokens");
+  });
+
+  test("requires draft-formatter when schema doesn't match refreshed source data", async () => {
+    const { workspace, operations } = await panelWorkspace();
+    await mkdir(join(workspace, "data"), { recursive: true });
+    await writeFile(
+      join(workspace, "data", "weather.json"),
+      JSON.stringify({ tempF: 72 }),
+    );
+
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+
+    await expect(operations.addPanel("weather")).rejects.toThrow(
+      "call draft-formatter to reshape it",
+    );
+  });
+
+  test("allows committing without a formatter when source data has never been refreshed", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await operations.draftComponent("weather", component);
+    await expect(operations.addPanel("weather")).resolves.toBeUndefined();
   });
 });
