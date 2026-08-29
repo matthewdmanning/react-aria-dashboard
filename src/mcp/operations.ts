@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import {
+  defaultDashboardConfiguration,
   parseDashboardConfiguration,
   type AgentAccess,
   type DashboardConfiguration,
@@ -72,9 +73,21 @@ export function createDashboardOperations(
     return { target, scoped };
   }
 
+  async function readConfiguration(): Promise<DashboardConfiguration> {
+    try {
+      return await readDashboardConfiguration(configurationPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await replaceDashboardConfiguration(
+        configurationPath,
+        defaultDashboardConfiguration,
+      );
+      return defaultDashboardConfiguration;
+    }
+  }
+
   async function permissions() {
-    return (await readDashboardConfiguration(configurationPath))
-      .agentPermissions;
+    return (await readConfiguration()).agentPermissions;
   }
 
   function validatePanelPreview(files: PanelPackageFiles) {
@@ -104,7 +117,7 @@ export function createDashboardOperations(
     },
 
     async applyPanelPackage(files: PanelPackageFiles): Promise<void> {
-      const configuration = await readDashboardConfiguration(configurationPath);
+      const configuration = await readConfiguration();
       requireAccess(configuration.agentPermissions.configuration, "write");
       requireAccess(configuration.agentPermissions.data, "write");
       const manifest = validatePanelPreview(files);
@@ -164,7 +177,7 @@ export function createDashboardOperations(
     },
 
     async refreshSource(sourceId: string): Promise<unknown> {
-      const configuration = await readDashboardConfiguration(configurationPath);
+      const configuration = await readConfiguration();
       requireAccess(configuration.agentPermissions.data, "write");
       const integration = configuration.integrations.find(
         (candidate) => candidate.id === sourceId,
@@ -184,13 +197,13 @@ export function createDashboardOperations(
       }
     },
     async inspectConfiguration(): Promise<DashboardConfiguration> {
-      const configuration = await readDashboardConfiguration(configurationPath);
+      const configuration = await readConfiguration();
       requireAccess(configuration.agentPermissions.configuration, "read");
       return configuration;
     },
 
     async replaceConfiguration(candidate: unknown): Promise<void> {
-      const current = await readDashboardConfiguration(configurationPath);
+      const current = await readConfiguration();
       requireAccess(current.agentPermissions.configuration, "write");
       const next = parseDashboardConfiguration(candidate);
       await replaceDashboardConfiguration(configurationPath, {
