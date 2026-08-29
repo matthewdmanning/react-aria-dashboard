@@ -18,6 +18,7 @@ const configuration: DashboardConfiguration = {
   panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
+  formatterSpecs: {},
 };
 
 describe("dashboard configuration persistence contract", () => {

@@ -1,6 +1,4 @@
-export interface CalendarPanelData {
-  events: { id: string; title: string; start: string; end?: string }[];
-}
+import type { CalendarPanelData } from "../panels/display";
 
 interface GoogleCalendarEvent {
   id?: unknown;

@@ -1,13 +1,16 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import Ajv from "ajv";
 
 import {
+  compileFormatterSpec,
   defaultDashboardConfiguration,
   parseDashboardConfiguration,
   type AgentAccess,
   type DashboardConfiguration,
+  type FormatterSpec,
 } from "../dashboard";
+import { panelKindSchemas } from "../dashboard/panel-kinds";
 import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,
@@ -17,24 +20,6 @@ import {
   type FetchCalendar,
   type GoogleCalendarTokenProvider,
 } from "../server/integrations/google-calendar";
-import { validatePanelPackageManifest } from "./panel-packages";
-import {
-  advanceDraftStage,
-  draftHasFile,
-  draftStageAtLeast,
-  panelDir,
-  panelExists,
-  readDraftFile,
-  readDraftMeta,
-  removeDraft,
-  seedDraftFromLivePanel,
-  writeDraftFile,
-  writeDraftMeta,
-} from "./draft-store";
-import {
-  formatPanelValidationErrors,
-  validatePanelComponentGovernance,
-} from "./panel-validation";
 
 export interface DashboardMcpDependencies {
   tokenProvider: GoogleCalendarTokenProvider;
@@ -46,8 +31,14 @@ export interface DashboardMcpPaths {
   calendarDataPath?: string;
 }
 
-const forbiddenSource =
-  /(?:import\s+.*from\s+|require\s*\()?['"](?:node:)?(?:child_process|fs|net|http|https|os|process)['"]/;
+export interface PanelArgs {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
+  formatter?: string;
+  formatterSpec?: FormatterSpec;
+}
 
 function requireAccess(access: AgentAccess, operation: "read" | "write") {
   if (access === "none" || (operation === "write" && access !== "write")) {
@@ -111,223 +102,135 @@ export function createDashboardOperations(
     }
   }
 
-  async function requireFormatterIfSchemaMismatched(
-    schema: string,
-    sources: string[],
-    hasFormatter: boolean,
+  function resolveFormatterFunction(
+    formatterKey: string,
+    formatterSpecs: Record<string, FormatterSpec>,
+  ): ((source: unknown) => unknown) | undefined {
+    if (formatterKey === "identity") return (source) => source;
+    const spec = formatterSpecs[formatterKey];
+    return spec ? compileFormatterSpec(spec) : undefined;
+  }
+
+  async function validateAgainstKind(
+    kind: string,
+    source: string,
+    formatterFunction: ((source: unknown) => unknown) | undefined,
   ) {
-    if (hasFormatter || sources.length === 0) return;
-    const sourceData = await readSourceData(sources[0]);
+    const sourceData = await readSourceData(source);
     if (sourceData === undefined) return;
+    if (!formatterFunction) return;
+    const formatted = formatterFunction(sourceData);
     const ajv = new Ajv();
-    const validate = ajv.compile(JSON.parse(schema) as object);
-    if (!validate(sourceData)) {
+    const validate = ajv.compile(panelKindSchemas[kind as keyof typeof panelKindSchemas]);
+    if (!validate(formatted)) {
       throw new Error(
-        "Panel schema does not match its source data; call draft-formatter to reshape it",
+        `Formatted data does not match the '${kind}' panel schema: ${ajv.errorsText(validate.errors)}`,
       );
     }
   }
 
-  async function commitDraft(id: string, mode: "add" | "edit"): Promise<void> {
+  async function upsertPanel(
+    args: PanelArgs,
+    mode: "add" | "edit",
+  ): Promise<void> {
     const configuration = await readConfiguration();
     requirePanelsAccess(configuration, "write");
 
-    await seedDraftFromLivePanel(workspace, id);
-    const draftMeta = await readDraftMeta(workspace, id);
-    if (!draftStageAtLeast(draftMeta, "component")) {
-      throw new Error(
-        `No draft found for panel '${id}'; call draft-schema then draft-component first`,
-      );
+    if (!(args.kind in panelKindSchemas)) {
+      throw new Error(`Unknown panel kind '${args.kind}'`);
     }
-    const meta = draftMeta!;
-    const alreadyExists = await panelExists(workspace, id);
+
+    const alreadyExists = configuration.panels.some(
+      (panel) => panel.id === args.id,
+    );
     if (mode === "add" && alreadyExists) {
-      throw new Error(`Panel '${id}' already exists; use edit-panel`);
+      throw new Error(`Panel '${args.id}' already exists; use edit-panel`);
     }
     if (mode === "edit" && !alreadyExists) {
-      throw new Error(`Panel '${id}' does not exist; use add-panel`);
+      throw new Error(`Panel '${args.id}' does not exist; use add-panel`);
     }
 
-    const hasFormatter = await draftHasFile(workspace, id, "formatter.ts");
-    const manifest = validatePanelPackageManifest({
-      id,
-      title: meta.title,
-      schema: "schema.json",
-      component: "panel.tsx",
-      formatter: hasFormatter ? "formatter.ts" : undefined,
-      sources: meta.sources,
-    });
+    const formatterSpecs = { ...configuration.formatterSpecs };
+    const formatterKey = args.formatterSpec
+      ? (args.formatter ?? args.id)
+      : (args.formatter ?? "identity");
+    if (args.formatterSpec) formatterSpecs[formatterKey] = args.formatterSpec;
 
-    const schema = await readDraftFile(workspace, id, "schema.json");
-    await requireFormatterIfSchemaMismatched(
-      schema,
-      meta.sources,
-      hasFormatter,
+    await validateAgainstKind(
+      args.kind,
+      args.source,
+      resolveFormatterFunction(formatterKey, formatterSpecs),
     );
 
-    const packageRoot = panelDir(workspace, id);
-    const temporaryRoot = `${packageRoot}.${process.pid}.tmp`;
-    const panelEntry = {
-      id: manifest.id,
-      title: manifest.title,
-      definition: manifest.id,
-    };
+    const panelEntry = { id: args.id, title: args.title, definition: args.kind };
     const wiringEntry = {
-      panelId: manifest.id,
-      source: manifest.sources[0] ?? manifest.id,
-      formatter: manifest.formatter ? manifest.id : "identity",
+      panelId: args.id,
+      source: args.source,
+      formatter: formatterKey,
     };
+
     const nextConfiguration =
       mode === "add"
         ? {
             ...configuration,
             panels: [...configuration.panels, panelEntry],
             wiring: [...configuration.wiring, wiringEntry],
-            arrangement: [...configuration.arrangement, manifest.id],
+            arrangement: [...configuration.arrangement, args.id],
+            formatterSpecs,
           }
         : {
             ...configuration,
             panels: configuration.panels.map((panel) =>
-              panel.id === id ? panelEntry : panel,
+              panel.id === args.id ? panelEntry : panel,
             ),
             wiring: configuration.wiring.map((wiring) =>
-              wiring.panelId === id ? wiringEntry : wiring,
+              wiring.panelId === args.id ? wiringEntry : wiring,
             ),
+            formatterSpecs,
           };
+
     parseDashboardConfiguration(nextConfiguration);
-
-    await mkdir(temporaryRoot, { recursive: true });
-    await writeFile(
-      join(temporaryRoot, "panel.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-    );
-    await writeFile(join(temporaryRoot, "schema.json"), `${schema.trim()}\n`);
-    await writeFile(
-      join(temporaryRoot, "panel.tsx"),
-      await readDraftFile(workspace, id, "panel.tsx"),
-    );
-    if (hasFormatter) {
-      await writeFile(
-        join(temporaryRoot, "formatter.ts"),
-        await readDraftFile(workspace, id, "formatter.ts"),
-      );
-    }
-
-    let previousPackage: string | undefined;
-    try {
-      previousPackage = `${packageRoot}.${process.pid}.bak`;
-      await rename(packageRoot, previousPackage).catch(() => undefined);
-      await rename(temporaryRoot, packageRoot);
-      await replaceDashboardConfiguration(configurationPath, nextConfiguration);
-      if (previousPackage)
-        await rm(previousPackage, { recursive: true, force: true });
-      await removeDraft(workspace, id);
-    } catch (error) {
-      await rm(temporaryRoot, { recursive: true, force: true });
-      if (previousPackage) {
-        await rm(packageRoot, { recursive: true, force: true });
-        await rename(previousPackage, packageRoot).catch(() => undefined);
-      }
-      throw error;
-    }
+    await replaceDashboardConfiguration(configurationPath, nextConfiguration);
   }
 
   return {
-    async draftSchema(
-      id: string,
-      title: string,
-      sources: string[],
-      schema: string,
-    ): Promise<{ id: string; ok: true }> {
-      const configuration = await readConfiguration();
-      requirePanelsAccess(configuration, "write");
-      await seedDraftFromLivePanel(workspace, id);
-      JSON.parse(schema);
-      await writeDraftFile(workspace, id, "schema.json", schema);
-      const meta = await readDraftMeta(workspace, id);
-      await writeDraftMeta(workspace, id, {
-        title,
-        sources,
-        stage: advanceDraftStage(meta, "schema"),
-      });
-      return { id, ok: true };
+    async addPanel(args: PanelArgs): Promise<void> {
+      await upsertPanel(args, "add");
     },
 
-    async draftComponent(
-      id: string,
-      component: string,
-    ): Promise<{ id: string; ok: true }> {
-      const configuration = await readConfiguration();
-      requirePanelsAccess(configuration, "write");
-      await seedDraftFromLivePanel(workspace, id);
-      const meta = await readDraftMeta(workspace, id);
-      if (!draftStageAtLeast(meta, "schema")) {
-        throw new Error(
-          `draft-component requires draft-schema first for panel '${id}'`,
-        );
-      }
-      if (forbiddenSource.test(component)) {
-        throw new Error("Panel component uses a forbidden API");
-      }
-      const governanceErrors = validatePanelComponentGovernance(component);
-      if (governanceErrors.length > 0) {
-        throw new Error(formatPanelValidationErrors(governanceErrors));
-      }
-      await writeDraftFile(workspace, id, "panel.tsx", component);
-      await writeDraftMeta(workspace, id, {
-        ...meta!,
-        stage: advanceDraftStage(meta, "component"),
-      });
-      return { id, ok: true };
-    },
-
-    async draftFormatter(
-      id: string,
-      formatter: string,
-    ): Promise<{ id: string; ok: true }> {
-      const configuration = await readConfiguration();
-      requirePanelsAccess(configuration, "write");
-      await seedDraftFromLivePanel(workspace, id);
-      const meta = await readDraftMeta(workspace, id);
-      if (!draftStageAtLeast(meta, "component")) {
-        throw new Error(
-          `draft-formatter requires draft-component first for panel '${id}'`,
-        );
-      }
-      if (forbiddenSource.test(formatter)) {
-        throw new Error("Panel formatter uses a forbidden API");
-      }
-      await writeDraftFile(workspace, id, "formatter.ts", formatter);
-      await writeDraftMeta(workspace, id, {
-        ...meta!,
-        stage: advanceDraftStage(meta, "formatter"),
-      });
-      return { id, ok: true };
-    },
-
-    async addPanel(id: string): Promise<void> {
-      await commitDraft(id, "add");
-    },
-
-    async editPanel(id: string): Promise<void> {
-      await commitDraft(id, "edit");
+    async editPanel(args: PanelArgs): Promise<void> {
+      await upsertPanel(args, "edit");
     },
 
     async removePanel(id: string): Promise<void> {
       const configuration = await readConfiguration();
       requirePanelsAccess(configuration, "write");
-      if (!(await panelExists(workspace, id))) {
+      if (!configuration.panels.some((panel) => panel.id === id)) {
         throw new Error(`Panel '${id}' does not exist`);
       }
-      await rm(panelDir(workspace, id), { recursive: true, force: true });
-      await removeDraft(workspace, id);
+
+      const removedFormatter = configuration.wiring.find(
+        (wiring) => wiring.panelId === id,
+      )?.formatter;
+      const remainingWiring = configuration.wiring.filter(
+        (wiring) => wiring.panelId !== id,
+      );
+      const formatterStillUsed = remainingWiring.some(
+        (wiring) => wiring.formatter === removedFormatter,
+      );
+      const formatterSpecs = { ...configuration.formatterSpecs };
+      if (removedFormatter && !formatterStillUsed) {
+        delete formatterSpecs[removedFormatter];
+      }
+
       await replaceDashboardConfiguration(configurationPath, {
         ...configuration,
         panels: configuration.panels.filter((panel) => panel.id !== id),
-        wiring: configuration.wiring.filter((wiring) => wiring.panelId !== id),
+        wiring: remainingWiring,
         arrangement: configuration.arrangement.filter(
           (panelId) => panelId !== id,
         ),
+        formatterSpecs,
       });
     },
 

@@ -2,11 +2,21 @@ import { join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
+import { formatterSpecSchema } from "../dashboard";
 import {
   createDashboardOperations,
   type DashboardMcpDependencies,
   type DashboardMcpPaths,
 } from "./operations";
+
+const panelArgsSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  source: z.string(),
+  formatter: z.string().optional(),
+  formatterSpec: formatterSpecSchema.optional(),
+});
 
 function result(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -34,60 +44,25 @@ export function createDashboardMcpServer(
   });
 
   server.registerTool(
-    "draft-schema",
-    {
-      description:
-        "Start or update a panel draft's JSON Schema, title, and sources.",
-      inputSchema: z.object({
-        id: z.string(),
-        title: z.string(),
-        sources: z.array(z.string()),
-        schema: z.string(),
-      }),
-    },
-    async ({ id, title, sources, schema }) =>
-      result(JSON.stringify(await operations.draftSchema(id, title, sources, schema))),
-  );
-  server.registerTool(
-    "draft-component",
-    {
-      description:
-        "Set a panel draft's UI component. Rejects non-RAC primitives and non-theme-token styling.",
-      inputSchema: z.object({ id: z.string(), component: z.string() }),
-    },
-    async ({ id, component }) =>
-      result(JSON.stringify(await operations.draftComponent(id, component))),
-  );
-  server.registerTool(
-    "draft-formatter",
-    {
-      description:
-        "Set a panel draft's optional formatter, used when source data doesn't already match the schema.",
-      inputSchema: z.object({ id: z.string(), formatter: z.string() }),
-    },
-    async ({ id, formatter }) =>
-      result(JSON.stringify(await operations.draftFormatter(id, formatter))),
-  );
-  server.registerTool(
     "add-panel",
     {
       description:
-        "Commit a new panel from its draft and wire it into the dashboard.",
-      inputSchema: z.object({ id: z.string() }),
+        "Add a new panel: pick a kind, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
+      inputSchema: panelArgsSchema,
     },
-    async ({ id }) => {
-      await operations.addPanel(id);
+    async (args) => {
+      await operations.addPanel(args);
       return result("Panel added");
     },
   );
   server.registerTool(
     "edit-panel",
     {
-      description: "Commit draft changes over an existing panel.",
-      inputSchema: z.object({ id: z.string() }),
+      description: "Replace an existing panel's kind, source, and formatter.",
+      inputSchema: panelArgsSchema,
     },
-    async ({ id }) => {
-      await operations.editPanel(id);
+    async (args) => {
+      await operations.editPanel(args);
       return result("Panel edited");
     },
   );

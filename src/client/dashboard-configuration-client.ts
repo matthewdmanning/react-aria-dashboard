@@ -21,3 +21,9 @@ export async function saveDashboardConfiguration(
   });
   if (!response.ok) throw new Error("Could not save dashboard configuration");
 }
+
+export async function loadSources(): Promise<Record<string, unknown>> {
+  const response = await fetch("/api/sources");
+  if (!response.ok) throw new Error("Could not load dashboard sources");
+  return (await response.json()) as Record<string, unknown>;
+}

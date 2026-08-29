@@ -6,68 +6,51 @@ Its architecture and domain concepts conform to [`ARCHITECTURE.md`](../../ARCHIT
 
 ## Standards & Architectural Conformance
 
-| Area                             | Conformance & Guarantees                                                                                                                                                           |
-| :------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Module Isolation**             | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                          |
-| **Entrypoint & Transport**       | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                      |
-| **Permission Governance**        | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `panels`) configured via Settings.                                                                    |
-| **Privilege Escalation Guard**   | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                        |
-| **Panel & Formatter Separation** | Respects the panel contract (UI + JSON Schema) and keeps formatter code separate from display components.                                                                          |
-| **UI Governance**                | `draft-component` rejects raw HTML elements that React Aria Components already covers, and any styling outside theme tokens (CSS custom properties) and Chota classNames.          |
-| **Sandbox & Path Isolation**     | Enforces path containment to prevent directory traversal outside `data/`, and blocks panel drafts from importing unsafe Node.js runtime APIs (`fs`, `child_process`, `net`, etc.). |
+| Area                            | Conformance & Guarantees                                                                                                                                                                                                |
+| :------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Module Isolation**            | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                                                               |
+| **Entrypoint & Transport**      | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                                                           |
+| **Permission Governance**       | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `panels`) configured via Settings.                                                                                                         |
+| **Privilege Escalation Guard**  | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                                                             |
+| **Panels are data, never code** | `add-panel`/`edit-panel` take a kind, a source, and a formatter — never UI or formatter source text. Governance is structural: there is no field to put a raw HTML element, an off-token color, or arbitrary code into. |
+| **Sandbox & Path Isolation**    | Enforces path containment to prevent directory traversal outside `data/`.                                                                                                                                               |
 
 ## Panel authoring workflow
 
-Panels are authored through a staged, per-step-validated draft workflow rather than one late gate:
+A panel is a config entry, not code. `add-panel`/`edit-panel` take:
 
-1. **`draft-schema`** — start or update a panel draft's JSON Schema, title, and sources.
-2. **`draft-component`** — set the draft's UI component. Rejects any raw HTML element RAC already provides, inline `style={{}}`, and literal hex/px values.
-3. **`draft-formatter`** (optional) — set the draft's formatter, needed only when the source data doesn't already match the schema. If omitted, the commit tools check the panel's refreshed source data against its schema and require a formatter if they don't match; if the source has never been refreshed, the commit is allowed.
+- **`kind`** — a key into the fixed, code-defined panel kind registry (`src/dashboard/panel-kinds.ts` for schemas, `src/client/panels/` for the paired UI). Kinds are added by editing source directly, not through this MCP interface — this is deliberately rare and reviewed like any other code change.
+- **`source`** — the id of a file under `data/` (see `read-data-file`/`edit-data-file`) or a saved integration.
+- **`formatter`** (optional) — `"identity"` if the source data already matches the kind's schema, a fixed built-in name, or omitted to default to `"identity"`.
+- **`formatterSpec`** (optional) — a declarative mapping spec (field renaming, `??` fallback chains, defaults, array mapping — see `compileFormatterSpec` in `src/dashboard/index.ts`) when the source data needs reshaping. Persisted under `formatterSpecs` in the dashboard configuration, keyed by formatter id.
 
-Each `draft-*` tool writes into a per-panel draft directory (`.dashboard/drafts/<id>/`). Calling `edit-panel` for an existing panel seeds that draft directory from the panel's current live files on first touch, so a commit can persist after re-running any single draft step without disturbing the rest.
+`add-panel`/`edit-panel` proactively validate: the `kind` must be real, and if a formatter can be evaluated server-side (`identity` or a `formatterSpec`), its output is Ajv-checked against the kind's schema before anything is persisted. Named built-in formatters (`message`, `google-calendar`) are trusted app-shell code and skip this check.
 
-Three commit tools then operate directly on panels:
+- **`add-panel`** — adds a new panel; rejects if the id already exists.
+- **`edit-panel`** — replaces an existing panel's kind/source/formatter in place; rejects if the id doesn't exist yet. Position in `arrangement` is preserved.
+- **`remove-panel`** — deletes a panel and prunes it from wiring, arrangement, and any `formatterSpecs` entry no longer referenced by another panel.
 
-- **`add-panel`** — commits a brand-new panel from its draft; rejects if the id already exists.
-- **`edit-panel`** — commits draft changes over an existing panel id; rejects if the id doesn't exist yet. Replaces the panel's existing configuration entries in place rather than appending.
-- **`remove-panel`** — deletes a panel and prunes it from wiring and arrangement automatically.
-
-There is no `preview-panel-package` tool — the client renders the panel locally.
+There is no draft pipeline, no on-disk panel package, no `draft-schema`/`draft-component`/`draft-formatter` — a panel commits in one call.
 
 ## Registered MCP Tools
 
 The server registers the following tools in `src/mcp/server.ts`:
 
-### `draft-schema`
-
-- **Input Schema**: `{ id: string, title: string, sources: string[], schema: string }`.
-- **Required Permissions**: `panels: write`.
-
-### `draft-component`
-
-- **Input Schema**: `{ id: string, component: string }`.
-- **Required Permissions**: `panels: write`.
-
-### `draft-formatter`
-
-- **Input Schema**: `{ id: string, formatter: string }`.
-- **Required Permissions**: `panels: write`.
-
 ### `add-panel`
 
-- **Description**: Commits a new panel from its draft and wires it into the dashboard.
-- **Input Schema**: `{ id: string }`.
+- **Description**: Adds a new panel.
+- **Input Schema**: `{ id: string, title: string, kind: string, source: string, formatter?: string, formatterSpec?: FormatterSpec }`.
 - **Required Permissions**: `panels: write`.
 
 ### `edit-panel`
 
-- **Description**: Commits draft changes over an existing panel.
-- **Input Schema**: `{ id: string }`.
+- **Description**: Replaces an existing panel's kind, source, and formatter.
+- **Input Schema**: same shape as `add-panel`.
 - **Required Permissions**: `panels: write`.
 
 ### `remove-panel`
 
-- **Description**: Deletes a panel and prunes its dashboard wiring and arrangement.
+- **Description**: Deletes a panel and prunes its dashboard wiring, arrangement, and unused formatter spec.
 - **Input Schema**: `{ id: string }`.
 - **Required Permissions**: `panels: write`.
 
@@ -103,7 +86,7 @@ The server registers the following tools in `src/mcp/server.ts`:
 
 ## Testing & Verification
 
-- **Unit & Contract Tests**: Colocated in `src/mcp/operations.test.ts` and `src/mcp/panel-packages.test.ts`.
+- **Unit & Contract Tests**: Colocated in `src/mcp/operations.test.ts` and `src/dashboard/configuration.test.tsx` (formatter spec interpreter).
 - **Run Tests**: `npm test`
 - **Type Check**: `npm run typecheck`
 - **Start MCP Server**: `npm run mcp`

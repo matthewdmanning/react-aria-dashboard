@@ -1,5 +1,6 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer as createViteServer } from "vite";
 
@@ -18,6 +19,7 @@ import {
 export async function handleDashboardConfigurationRequest(
   request: Request,
   dashboardPath: string,
+  dataPath?: string,
 ): Promise<Response> {
   if (request.method === "GET") {
     try {
@@ -28,6 +30,13 @@ export async function handleDashboardConfigurationRequest(
         dashboardPath,
         defaultDashboardConfiguration,
       );
+      if (dataPath) {
+        await mkdir(dataPath, { recursive: true });
+        await writeFile(
+          join(dataPath, "welcome.json"),
+          JSON.stringify({ text: "Dashboard architecture is ready." }),
+        );
+      }
       return Response.json(defaultDashboardConfiguration);
     }
   }
@@ -38,6 +47,36 @@ export async function handleDashboardConfigurationRequest(
   }
 
   return new Response("Method not allowed", { status: 405 });
+}
+
+export async function handleSourcesRequest(
+  request: Request,
+  dashboardPath: string,
+  dataPath: string,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+  const configuration = await readDashboardConfiguration(dashboardPath).catch(
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+      return defaultDashboardConfiguration;
+    },
+  );
+  const sourceIds = new Set(configuration.wiring.map(({ source }) => source));
+  const sources: Record<string, unknown> = {};
+  await Promise.all(
+    [...sourceIds].map(async (id) => {
+      try {
+        sources[id] = JSON.parse(
+          await readFile(join(dataPath, `${id}.json`), "utf8"),
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }),
+  );
+  return Response.json(sources);
 }
 
 export async function handleGoogleCalendarRequest(
@@ -73,6 +112,10 @@ async function startServer() {
   const calendarDataPath =
     process.env.DASHBOARD_CALENDAR_DATA_PATH ??
     resolve(".dashboard/google-calendar.json");
+  // Must match the MCP server's data directory (src/mcp/operations.ts's
+  // dataFilePath) so a panel wired to a source that edit-data-file wrote
+  // is actually visible here.
+  const dataPath = resolve(process.env.DASHBOARD_WORKSPACE ?? ".", "data");
   const tokenProvider: GoogleCalendarTokenProvider = async () => {
     throw new Error("Google Calendar credentials are not configured");
   };
@@ -90,6 +133,27 @@ async function startServer() {
               : undefined,
           }),
           dashboardPath,
+          dataPath,
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(
+          error instanceof Error ? error.message : "Invalid request",
+        );
+      }
+      return;
+    }
+
+    if (request.url === "/api/sources") {
+      try {
+        const result = await handleSourcesRequest(
+          new Request(`http://dashboard${request.url}`, {
+            method: request.method,
+          }),
+          dashboardPath,
+          dataPath,
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));
         response.end(Buffer.from(await result.arrayBuffer()));
