@@ -6,15 +6,15 @@ Its architecture and domain concepts conform to [`ARCHITECTURE.md`](../../ARCHIT
 
 ## Standards & Architectural Conformance
 
-| Area                             | Conformance & Guarantees                                                                                                                                                                     |
-| :-------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Module Isolation**              | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                                  |
-| **Entrypoint & Transport**        | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                              |
-| **Permission Governance**         | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `panels`) configured via Settings.                                                                            |
-| **Privilege Escalation Guard**    | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                                |
-| **Panel & Formatter Separation**  | Respects the panel contract (UI + JSON Schema) and keeps formatter code separate from display components.                                                                                  |
-| **UI Governance**                 | `draft-component` rejects raw HTML elements that React Aria Components already covers, and any styling outside theme tokens (CSS custom properties) and Chota classNames.                 |
-| **Sandbox & Path Isolation**      | Enforces path containment to prevent directory traversal outside `data/`, and blocks panel drafts from importing unsafe Node.js runtime APIs (`fs`, `child_process`, `net`, etc.).         |
+| Area                             | Conformance & Guarantees                                                                                                                                                           |
+| :------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Module Isolation**             | MCP server logic is self-contained in `src/mcp/` without coupling to UI or client layers.                                                                                          |
+| **Entrypoint & Transport**       | Implemented using `@modelcontextprotocol/server` over stdio (`src/mcp/index.ts`), executed via `npm run mcp`.                                                                      |
+| **Permission Governance**        | All operations strictly enforce `agentPermissions` (`configuration`, `data`, `panels`) configured via Settings.                                                                    |
+| **Privilege Escalation Guard**   | `edit-dashboard-settings` preserves existing Settings-managed `agentPermissions`, preventing agents from modifying their own access levels.                                        |
+| **Panel & Formatter Separation** | Respects the panel contract (UI + JSON Schema) and keeps formatter code separate from display components.                                                                          |
+| **UI Governance**                | `draft-component` rejects raw HTML elements that React Aria Components already covers, and any styling outside theme tokens (CSS custom properties) and Chota classNames.          |
+| **Sandbox & Path Isolation**     | Enforces path containment to prevent directory traversal outside `data/`, and blocks panel drafts from importing unsafe Node.js runtime APIs (`fs`, `child_process`, `net`, etc.). |
 
 ## Panel authoring workflow
 
