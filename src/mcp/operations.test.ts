@@ -29,10 +29,7 @@ describe("dashboard MCP operations contract", () => {
       ...configuration,
       theme: "contrast",
     });
-    await operations.editDataFile(
-      "weather.json",
-      '{"temperature":72}\n',
-    );
+    await operations.editDataFile("weather.json", '{"temperature":72}\n');
 
     await expect(operations.readDataFile("weather.json")).resolves.toBe(
       '{"temperature":72}\n',
@@ -206,8 +203,7 @@ describe("dashboard MCP operations contract", () => {
     "export function Panel({ data }) { return data.temperature; }";
 
   test("drafts a panel step by step, then adds it", async () => {
-    const { workspace, configurationPath, operations } =
-      await panelWorkspace();
+    const { workspace, configurationPath, operations } = await panelWorkspace();
 
     await operations.draftSchema("weather", "Weather", ["weather"], schema);
     await operations.draftComponent("weather", component);
@@ -241,6 +237,14 @@ describe("dashboard MCP operations contract", () => {
     ).rejects.toThrow("draft-component requires draft-schema first");
   });
 
+  test("rejects draft-formatter before draft-component", async () => {
+    const { operations } = await panelWorkspace();
+    await operations.draftSchema("weather", "Weather", ["weather"], schema);
+    await expect(
+      operations.draftFormatter("weather", "export default (d) => d;"),
+    ).rejects.toThrow("draft-formatter requires draft-component first");
+  });
+
   test("rejects add-panel for an id that already exists", async () => {
     const { operations } = await panelWorkspace();
     await operations.draftSchema("weather", "Weather", ["weather"], schema);
@@ -264,8 +268,7 @@ describe("dashboard MCP operations contract", () => {
   });
 
   test("edit-panel replaces in place and can persist after a single draft step", async () => {
-    const { workspace, configurationPath, operations } =
-      await panelWorkspace();
+    const { workspace, configurationPath, operations } = await panelWorkspace();
     await operations.draftSchema("weather", "Weather", ["weather"], schema);
     await operations.draftComponent("weather", component);
     await operations.addPanel("weather");
@@ -292,8 +295,7 @@ describe("dashboard MCP operations contract", () => {
   });
 
   test("removes a panel and prunes its wiring and arrangement", async () => {
-    const { workspace, configurationPath, operations } =
-      await panelWorkspace();
+    const { workspace, configurationPath, operations } = await panelWorkspace();
     await operations.draftSchema("weather", "Weather", ["weather"], schema);
     await operations.draftComponent("weather", component);
     await operations.addPanel("weather");
@@ -337,7 +339,7 @@ describe("dashboard MCP operations contract", () => {
     await expect(
       operations.draftComponent(
         "weather",
-        "export function Panel() { return <div className=\"#ff0000\" />; }",
+        'export function Panel() { return <div className="#ff0000" />; }',
       ),
     ).rejects.toThrow("theme tokens");
   });

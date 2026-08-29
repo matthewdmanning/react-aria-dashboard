@@ -1,9 +1,35 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+export type DraftStage = "schema" | "component" | "formatter";
+
+const STAGE_RANK: Record<DraftStage, number> = {
+  schema: 1,
+  component: 2,
+  formatter: 3,
+};
+
 export interface DraftMeta {
   title: string;
   sources: string[];
+  stage: DraftStage;
+}
+
+/** True once `meta` has reached at least `stage` in the schema -> component -> formatter chain. */
+export function draftStageAtLeast(
+  meta: DraftMeta | undefined,
+  stage: DraftStage,
+): boolean {
+  return meta !== undefined && STAGE_RANK[meta.stage] >= STAGE_RANK[stage];
+}
+
+/** The furthest of the draft's current stage and `stage` — redoing an earlier step never downgrades progress. */
+export function advanceDraftStage(
+  meta: DraftMeta | undefined,
+  stage: DraftStage,
+): DraftStage {
+  if (meta && STAGE_RANK[meta.stage] >= STAGE_RANK[stage]) return meta.stage;
+  return stage;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -112,6 +138,7 @@ export async function seedDraftFromLivePanel(
   await writeDraftMeta(workspace, id, {
     title: manifest.title,
     sources: manifest.sources,
+    stage: manifest.formatter ? "formatter" : "component",
   });
   await writeFile(
     join(draftDir(workspace, id), "schema.json"),

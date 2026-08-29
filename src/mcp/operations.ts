@@ -19,8 +19,9 @@ import {
 } from "../server/integrations/google-calendar";
 import { validatePanelPackageManifest } from "./panel-packages";
 import {
-  draftExists,
+  advanceDraftStage,
   draftHasFile,
+  draftStageAtLeast,
   panelDir,
   panelExists,
   readDraftFile,
@@ -101,7 +102,9 @@ export function createDashboardOperations(
 
   async function readSourceData(sourceId: string): Promise<unknown> {
     try {
-      return JSON.parse(await readFile(dataFilePath(`${sourceId}.json`).target, "utf8"));
+      return JSON.parse(
+        await readFile(dataFilePath(`${sourceId}.json`).target, "utf8"),
+      );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw error;
@@ -125,21 +128,18 @@ export function createDashboardOperations(
     }
   }
 
-  async function commitDraft(
-    id: string,
-    mode: "add" | "edit",
-  ): Promise<void> {
+  async function commitDraft(id: string, mode: "add" | "edit"): Promise<void> {
     const configuration = await readConfiguration();
     requirePanelsAccess(configuration, "write");
 
     await seedDraftFromLivePanel(workspace, id);
-    const meta = await readDraftMeta(workspace, id);
-    const hasComponent = await draftHasFile(workspace, id, "panel.tsx");
-    if (!meta || !hasComponent) {
+    const draftMeta = await readDraftMeta(workspace, id);
+    if (!draftStageAtLeast(draftMeta, "component")) {
       throw new Error(
-        `No draft found for panel '${id}'; call draft-schema and draft-component first`,
+        `No draft found for panel '${id}'; call draft-schema then draft-component first`,
       );
     }
+    const meta = draftMeta!;
     const alreadyExists = await panelExists(workspace, id);
     if (mode === "add" && alreadyExists) {
       throw new Error(`Panel '${id}' already exists; use edit-panel`);
@@ -167,7 +167,11 @@ export function createDashboardOperations(
 
     const packageRoot = panelDir(workspace, id);
     const temporaryRoot = `${packageRoot}.${process.pid}.tmp`;
-    const panelEntry = { id: manifest.id, title: manifest.title, definition: manifest.id };
+    const panelEntry = {
+      id: manifest.id,
+      title: manifest.title,
+      definition: manifest.id,
+    };
     const wiringEntry = {
       panelId: manifest.id,
       source: manifest.sources[0] ?? manifest.id,
@@ -240,7 +244,12 @@ export function createDashboardOperations(
       await seedDraftFromLivePanel(workspace, id);
       JSON.parse(schema);
       await writeDraftFile(workspace, id, "schema.json", schema);
-      await writeDraftMeta(workspace, id, { title, sources });
+      const meta = await readDraftMeta(workspace, id);
+      await writeDraftMeta(workspace, id, {
+        title,
+        sources,
+        stage: advanceDraftStage(meta, "schema"),
+      });
       return { id, ok: true };
     },
 
@@ -251,7 +260,8 @@ export function createDashboardOperations(
       const configuration = await readConfiguration();
       requirePanelsAccess(configuration, "write");
       await seedDraftFromLivePanel(workspace, id);
-      if (!(await draftExists(workspace, id))) {
+      const meta = await readDraftMeta(workspace, id);
+      if (!draftStageAtLeast(meta, "schema")) {
         throw new Error(
           `draft-component requires draft-schema first for panel '${id}'`,
         );
@@ -264,6 +274,10 @@ export function createDashboardOperations(
         throw new Error(formatPanelValidationErrors(governanceErrors));
       }
       await writeDraftFile(workspace, id, "panel.tsx", component);
+      await writeDraftMeta(workspace, id, {
+        ...meta!,
+        stage: advanceDraftStage(meta, "component"),
+      });
       return { id, ok: true };
     },
 
@@ -274,15 +288,20 @@ export function createDashboardOperations(
       const configuration = await readConfiguration();
       requirePanelsAccess(configuration, "write");
       await seedDraftFromLivePanel(workspace, id);
-      if (!(await draftExists(workspace, id))) {
+      const meta = await readDraftMeta(workspace, id);
+      if (!draftStageAtLeast(meta, "component")) {
         throw new Error(
-          `draft-formatter requires draft-schema first for panel '${id}'`,
+          `draft-formatter requires draft-component first for panel '${id}'`,
         );
       }
       if (forbiddenSource.test(formatter)) {
         throw new Error("Panel formatter uses a forbidden API");
       }
       await writeDraftFile(workspace, id, "formatter.ts", formatter);
+      await writeDraftMeta(workspace, id, {
+        ...meta!,
+        stage: advanceDraftStage(meta, "formatter"),
+      });
       return { id, ok: true };
     },
 
