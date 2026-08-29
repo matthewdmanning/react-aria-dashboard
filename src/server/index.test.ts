@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
@@ -7,6 +7,7 @@ import { defaultDashboardConfiguration } from "../dashboard";
 import {
   handleDashboardConfigurationRequest,
   handleGoogleCalendarRequest,
+  handleSourcesRequest,
 } from "./index";
 
 describe("Settings configuration API contract", () => {
@@ -80,5 +81,42 @@ describe("Settings configuration API contract", () => {
         { tokenProvider: async () => "unused" },
       ).then((response) => response.json()),
     ).resolves.toEqual(source);
+  });
+
+  test("serves every wired source it can find, skipping missing files", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sources-api-"));
+    const configurationPath = join(directory, "dashboard.json");
+    const dataPath = join(directory, "data");
+    await mkdir(dataPath, { recursive: true });
+    await writeFile(
+      join(dataPath, "welcome.json"),
+      JSON.stringify({ text: "Ready" }),
+    );
+    await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...defaultDashboardConfiguration,
+          panels: [
+            { id: "welcome", title: "Dashboard", definition: "message" },
+            { id: "missing", title: "Missing", definition: "message" },
+          ],
+          wiring: [
+            { panelId: "welcome", source: "welcome", formatter: "message" },
+            { panelId: "missing", source: "no-such-source", formatter: "identity" },
+          ],
+          arrangement: ["welcome", "missing"],
+        }),
+      }),
+      configurationPath,
+    );
+
+    const response = await handleSourcesRequest(
+      new Request("http://dashboard/api/sources"),
+      configurationPath,
+      dataPath,
+    );
+
+    await expect(response.json()).resolves.toEqual({ welcome: { text: "Ready" } });
   });
 });

@@ -1,4 +1,5 @@
 import type { PanelDefinition } from "../../dashboard";
+import { panelKindSchemas } from "../../dashboard/panel-kinds";
 
 export interface TablePanelData {
   columns: { key: string; label: string }[];
@@ -6,31 +7,7 @@ export interface TablePanelData {
 }
 
 export const tablePanel: PanelDefinition<TablePanelData> = {
-  schema: {
-    type: "object",
-    properties: {
-      columns: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { key: { type: "string" }, label: { type: "string" } },
-          required: ["key", "label"],
-          additionalProperties: false,
-        },
-      },
-      rows: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: {
-            anyOf: [{ type: "string" }, { type: "number" }, { type: "null" }],
-          },
-        },
-      },
-    },
-    required: ["columns", "rows"],
-    additionalProperties: false,
-  },
+  schema: panelKindSchemas.table,
   Component: ({ data }) => (
     <table>
       <thead>
@@ -60,26 +37,7 @@ export interface CardsPanelData {
 }
 
 export const cardsPanel: PanelDefinition<CardsPanelData> = {
-  schema: {
-    type: "object",
-    properties: {
-      items: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            body: { type: "string" },
-          },
-          required: ["id", "title"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["items"],
-    additionalProperties: false,
-  },
+  schema: panelKindSchemas.cards,
   Component: ({ data }) => (
     <ul>
       {data.items.map(({ id, title, body }) => (
@@ -99,27 +57,7 @@ export interface CalendarPanelData {
 }
 
 export const calendarPanel: PanelDefinition<CalendarPanelData> = {
-  schema: {
-    type: "object",
-    properties: {
-      events: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string" },
-            start: { type: "string" },
-            end: { type: "string" },
-          },
-          required: ["id", "title", "start"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["events"],
-    additionalProperties: false,
-  },
+  schema: panelKindSchemas.calendar,
   Component: ({ data }) => (
     <ul>
       {data.events.map(({ id, title, start, end }) => (
@@ -144,24 +82,7 @@ export interface ChartPanelData {
 }
 
 export const chartPanel: PanelDefinition<ChartPanelData> = {
-  schema: {
-    type: "object",
-    properties: {
-      title: { type: "string" },
-      summary: { type: "string" },
-      series: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: { label: { type: "string" }, value: { type: "number" } },
-          required: ["label", "value"],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ["title", "summary", "series"],
-    additionalProperties: false,
-  },
+  schema: panelKindSchemas.chart,
   Component: ({ data }) => {
     const maximum = Math.max(1, ...data.series.map(({ value }) => value));
     return (

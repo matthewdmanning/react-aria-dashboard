@@ -26,37 +26,36 @@ Settings changes dashboard configuration through the same persistence interface 
 
 A dashboard specifies the arrangement or ordering of panels on a page or display.
 
+## Panel kind
+
+A panel kind is a fixed pair, defined in application source, not by the agent:
+
+- a UI component; and
+- a JSON Schema describing the data the component can display.
+
+The component and schema form a contract: the component can render the contents of any data that fits the schema. Kinds are few and rarely added — adding one is an ordinary code change, reviewed like any other, not an operation the MCP interface exposes. A kind is responsible only for displaying properly formatted data; it does not extract, remove, or reformat source data.
+
 ## Panel
 
-A panel is an independent unit composed of:
-
-- a UI; and
-- a JSON Schema describing the data the UI can display.
-
-The UI and JSON Schema form a contract: the UI can render the contents of any properly formatted data that fits the schema.
-
-A panel is responsible only for displaying properly formatted data. It does not extract, remove, or reformat source data.
+A panel is data, never code: an id, a title, a reference to a panel kind, a data source, and a formatter. A panel is responsible only for choosing and configuring a kind — it carries no UI or schema of its own.
 
 ## Data formatting and wiring
 
-Formatting is separate code, even when a formatter is used by only one panel. A formatter may extract or reformat source data, including removing fields that the panel does not need.
+A formatter is either `"identity"` (the source data already matches the panel kind's schema — a human or an agent wrote it directly, e.g. a prioritized task list), a fixed named function bundled with the application shell (not agent-editable), or a declarative mapping spec: field renaming, fallback chains, defaults, and array mapping over source data. Formatting is never arbitrary agent-authored code.
 
-The agent creates and maintains the wiring between source data, formatter code, the panel's JSON Schema, and the panel UI. Defining and changing this wiring is within the project's scope.
-
-The agent is responsible for ensuring that formatted data fits the panel's JSON Schema and that the panel UI can render it. Project-level validation or preview of formatter output is not part of this architecture.
+The agent creates and maintains the wiring between source data, a formatter, a panel kind, and the panel's position in the dashboard. Defining and changing this wiring is within the project's scope. The agent is responsible for ensuring that formatted data fits the panel kind's JSON Schema; the MCP server validates this proactively wherever the formatter can be evaluated server-side (identity or a declarative spec).
 
 ## Agent responsibility
 
 In response to user prompts, the agent may create or change:
 
 - dashboard structure and panel arrangement;
-- panel UIs and JSON Schemas;
-- formatter code and data wiring;
+- panels: their kind, data source, and formatter (data, not code);
 - dashboard data and data relationships;
 - presentation, settings, and integrations; and
-- any other part of the dashboard needed to fulfill the request.
+- any other part of the dashboard needed to fulfill the request, within the fixed set of panel kinds available.
 
-Record schemas, record collections, and predefined display catalogs are not universal dashboard structures. An agent may use such structures for a particular dashboard when the user's request calls for them.
+Record schemas, record collections, and predefined display catalogs are not universal dashboard structures. An agent may use such structures for a particular dashboard when the user's request calls for them. Panel kinds are exactly such a catalog: the fixed set available at a given time, extended only through a source code change, never through the MCP interface.
 
 Sensitive data handling inside an agent-created panel is outside this project's scope. Repository content must never expose sensitive field names or values.
 

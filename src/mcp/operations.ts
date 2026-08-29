@@ -1,12 +1,16 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import Ajv from "ajv";
 
 import {
+  compileFormatterSpec,
   defaultDashboardConfiguration,
   parseDashboardConfiguration,
   type AgentAccess,
   type DashboardConfiguration,
+  type FormatterSpec,
 } from "../dashboard";
+import { panelKindSchemas } from "../dashboard/panel-kinds";
 import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,
@@ -16,10 +20,6 @@ import {
   type FetchCalendar,
   type GoogleCalendarTokenProvider,
 } from "../server/integrations/google-calendar";
-import {
-  validatePanelPackageManifest,
-  type PanelPackageManifest,
-} from "./panel-packages";
 
 export interface DashboardMcpDependencies {
   tokenProvider: GoogleCalendarTokenProvider;
@@ -31,11 +31,13 @@ export interface DashboardMcpPaths {
   calendarDataPath?: string;
 }
 
-export interface PanelPackageFiles {
-  manifest: PanelPackageManifest;
-  schema: string;
-  component: string;
+export interface PanelArgs {
+  id: string;
+  title: string;
+  kind: string;
+  source: string;
   formatter?: string;
+  formatterSpec?: FormatterSpec;
 }
 
 function requireAccess(access: AgentAccess, operation: "read" | "write") {
@@ -59,16 +61,12 @@ export function createDashboardOperations(
   const calendarDataPath =
     paths.calendarDataPath ?? join(workspace, "google-calendar.json");
 
-  function artifactPath(path: string) {
-    const target = resolve(workspace, path);
-    const scoped = relative(workspace, target);
+  function dataFilePath(path: string) {
+    const dataRoot = join(workspace, "data");
+    const target = resolve(dataRoot, path);
+    const scoped = relative(dataRoot, target);
     if (!scoped || scoped.startsWith(`..${sep}`) || isAbsolute(scoped)) {
-      throw new Error("Path must stay inside the dashboard workspace");
-    }
-    if (target.toLowerCase() === configurationPath.toLowerCase()) {
-      throw new Error(
-        "Use dashboard configuration operations for dashboard.json",
-      );
+      throw new Error("Path must stay inside the dashboard data directory");
     }
     return { target, scoped };
   }
@@ -86,94 +84,154 @@ export function createDashboardOperations(
     }
   }
 
-  async function permissions() {
-    return (await readConfiguration()).agentPermissions;
+  function requirePanelsAccess(
+    configuration: DashboardConfiguration,
+    operation: "read" | "write",
+  ) {
+    requireAccess(configuration.agentPermissions.panels, operation);
   }
 
-  function validatePanelPreview(files: PanelPackageFiles) {
-    const manifest = validatePanelPackageManifest(files.manifest);
-    if (
-      manifest.schema !== "schema.json" ||
-      manifest.component !== "panel.tsx"
-    ) {
-      throw new Error("Panel preview requires schema.json and panel.tsx");
+  async function readSourceData(sourceId: string): Promise<unknown> {
+    try {
+      return JSON.parse(
+        await readFile(dataFilePath(`${sourceId}.json`).target, "utf8"),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
     }
-    const forbidden =
-      /(?:import\s+.*from\s+|require\s*\()?['"](?:node:)?(?:child_process|fs|net|http|https|os|process)['"]/;
-    if (
-      forbidden.test(files.component) ||
-      (files.formatter && forbidden.test(files.formatter))
-    ) {
-      throw new Error("Panel package uses a forbidden API");
+  }
+
+  function resolveFormatterFunction(
+    formatterKey: string,
+    formatterSpecs: Record<string, FormatterSpec>,
+  ): ((source: unknown) => unknown) | undefined {
+    if (formatterKey === "identity") return (source) => source;
+    const spec = formatterSpecs[formatterKey];
+    return spec ? compileFormatterSpec(spec) : undefined;
+  }
+
+  async function validateAgainstKind(
+    kind: string,
+    source: string,
+    formatterFunction: ((source: unknown) => unknown) | undefined,
+  ) {
+    const sourceData = await readSourceData(source);
+    if (sourceData === undefined) return;
+    if (!formatterFunction) return;
+    const formatted = formatterFunction(sourceData);
+    const ajv = new Ajv();
+    const validate = ajv.compile(panelKindSchemas[kind as keyof typeof panelKindSchemas]);
+    if (!validate(formatted)) {
+      throw new Error(
+        `Formatted data does not match the '${kind}' panel schema: ${ajv.errorsText(validate.errors)}`,
+      );
     }
-    JSON.parse(files.schema);
-    return manifest;
+  }
+
+  async function upsertPanel(
+    args: PanelArgs,
+    mode: "add" | "edit",
+  ): Promise<void> {
+    const configuration = await readConfiguration();
+    requirePanelsAccess(configuration, "write");
+
+    if (!(args.kind in panelKindSchemas)) {
+      throw new Error(`Unknown panel kind '${args.kind}'`);
+    }
+
+    const alreadyExists = configuration.panels.some(
+      (panel) => panel.id === args.id,
+    );
+    if (mode === "add" && alreadyExists) {
+      throw new Error(`Panel '${args.id}' already exists; use edit-panel`);
+    }
+    if (mode === "edit" && !alreadyExists) {
+      throw new Error(`Panel '${args.id}' does not exist; use add-panel`);
+    }
+
+    const formatterSpecs = { ...configuration.formatterSpecs };
+    const formatterKey = args.formatterSpec
+      ? (args.formatter ?? args.id)
+      : (args.formatter ?? "identity");
+    if (args.formatterSpec) formatterSpecs[formatterKey] = args.formatterSpec;
+
+    await validateAgainstKind(
+      args.kind,
+      args.source,
+      resolveFormatterFunction(formatterKey, formatterSpecs),
+    );
+
+    const panelEntry = { id: args.id, title: args.title, definition: args.kind };
+    const wiringEntry = {
+      panelId: args.id,
+      source: args.source,
+      formatter: formatterKey,
+    };
+
+    const nextConfiguration =
+      mode === "add"
+        ? {
+            ...configuration,
+            panels: [...configuration.panels, panelEntry],
+            wiring: [...configuration.wiring, wiringEntry],
+            arrangement: [...configuration.arrangement, args.id],
+            formatterSpecs,
+          }
+        : {
+            ...configuration,
+            panels: configuration.panels.map((panel) =>
+              panel.id === args.id ? panelEntry : panel,
+            ),
+            wiring: configuration.wiring.map((wiring) =>
+              wiring.panelId === args.id ? wiringEntry : wiring,
+            ),
+            formatterSpecs,
+          };
+
+    parseDashboardConfiguration(nextConfiguration);
+    await replaceDashboardConfiguration(configurationPath, nextConfiguration);
   }
 
   return {
-    async previewPanelPackage(files: PanelPackageFiles) {
-      const manifest = validatePanelPreview(files);
-      return { id: manifest.id, title: manifest.title, preview: true };
+    async addPanel(args: PanelArgs): Promise<void> {
+      await upsertPanel(args, "add");
     },
 
-    async applyPanelPackage(files: PanelPackageFiles): Promise<void> {
+    async editPanel(args: PanelArgs): Promise<void> {
+      await upsertPanel(args, "edit");
+    },
+
+    async removePanel(id: string): Promise<void> {
       const configuration = await readConfiguration();
-      requireAccess(configuration.agentPermissions.configuration, "write");
-      requireAccess(configuration.agentPermissions.data, "write");
-      const manifest = validatePanelPreview(files);
-      const packageRoot = join(workspace, "panels", manifest.id);
-      const temporaryRoot = `${packageRoot}.${process.pid}.tmp`;
-      const panelConfiguration = {
-        ...configuration,
-        panels: [
-          ...configuration.panels,
-          {
-            id: manifest.id,
-            title: manifest.title,
-            definition: manifest.id,
-          },
-        ],
-        wiring: [
-          ...configuration.wiring,
-          {
-            panelId: manifest.id,
-            source: manifest.sources[0] ?? manifest.id,
-            formatter: manifest.formatter ? manifest.id : "identity",
-          },
-        ],
-        arrangement: [...configuration.arrangement, manifest.id],
-      };
-      parseDashboardConfiguration(panelConfiguration);
-      await mkdir(temporaryRoot, { recursive: true });
-      await writeFile(
-        join(temporaryRoot, "panel.json"),
-        `${JSON.stringify(manifest, null, 2)}\n`,
-      );
-      await writeFile(
-        join(temporaryRoot, "schema.json"),
-        `${files.schema.trim()}\n`,
-      );
-      await writeFile(join(temporaryRoot, "panel.tsx"), files.component);
-      if (files.formatter)
-        await writeFile(join(temporaryRoot, "formatter.ts"), files.formatter);
-      let previousPackage: string | undefined;
-      try {
-        previousPackage = `${packageRoot}.${process.pid}.bak`;
-        await rename(packageRoot, previousPackage).catch(() => undefined);
-        await rename(temporaryRoot, packageRoot);
-        await replaceDashboardConfiguration(
-          configurationPath,
-          panelConfiguration,
-        );
-        if (previousPackage)
-          await rm(previousPackage, { recursive: true, force: true });
-      } catch (error) {
-        await rm(temporaryRoot, { recursive: true, force: true });
-        await rm(packageRoot, { recursive: true, force: true });
-        if (previousPackage)
-          await rename(previousPackage, packageRoot).catch(() => undefined);
-        throw error;
+      requirePanelsAccess(configuration, "write");
+      if (!configuration.panels.some((panel) => panel.id === id)) {
+        throw new Error(`Panel '${id}' does not exist`);
       }
+
+      const removedFormatter = configuration.wiring.find(
+        (wiring) => wiring.panelId === id,
+      )?.formatter;
+      const remainingWiring = configuration.wiring.filter(
+        (wiring) => wiring.panelId !== id,
+      );
+      const formatterStillUsed = remainingWiring.some(
+        (wiring) => wiring.formatter === removedFormatter,
+      );
+      const formatterSpecs = { ...configuration.formatterSpecs };
+      if (removedFormatter && !formatterStillUsed) {
+        delete formatterSpecs[removedFormatter];
+      }
+
+      await replaceDashboardConfiguration(configurationPath, {
+        ...configuration,
+        panels: configuration.panels.filter((panel) => panel.id !== id),
+        wiring: remainingWiring,
+        arrangement: configuration.arrangement.filter(
+          (panelId) => panelId !== id,
+        ),
+        formatterSpecs,
+      });
     },
 
     async refreshSource(sourceId: string): Promise<unknown> {
@@ -196,13 +254,13 @@ export function createDashboardOperations(
           throw new Error(`Unsupported integration type: ${integration.type}`);
       }
     },
-    async inspectConfiguration(): Promise<DashboardConfiguration> {
+    async readDashboardSettings(): Promise<DashboardConfiguration> {
       const configuration = await readConfiguration();
       requireAccess(configuration.agentPermissions.configuration, "read");
       return configuration;
     },
 
-    async replaceConfiguration(candidate: unknown): Promise<void> {
+    async editDashboardSettings(candidate: unknown): Promise<void> {
       const current = await readConfiguration();
       requireAccess(current.agentPermissions.configuration, "write");
       const next = parseDashboardConfiguration(candidate);
@@ -212,15 +270,17 @@ export function createDashboardOperations(
       });
     },
 
-    async readArtifact(path: string): Promise<string> {
-      const { target } = artifactPath(path);
-      requireAccess((await permissions()).data, "read");
+    async readDataFile(path: string): Promise<string> {
+      const { target } = dataFilePath(path);
+      const configuration = await readConfiguration();
+      requireAccess(configuration.agentPermissions.data, "read");
       return readFile(target, "utf8");
     },
 
-    async writeArtifact(path: string, content: string): Promise<void> {
-      const { target } = artifactPath(path);
-      requireAccess((await permissions()).data, "write");
+    async editDataFile(path: string, content: string): Promise<void> {
+      const { target } = dataFilePath(path);
+      const configuration = await readConfiguration();
+      requireAccess(configuration.agentPermissions.data, "write");
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, content);
     },

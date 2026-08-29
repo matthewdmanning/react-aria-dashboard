@@ -2,12 +2,21 @@ import { join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
+import { formatterSpecSchema } from "../dashboard";
 import {
   createDashboardOperations,
   type DashboardMcpDependencies,
-  type PanelPackageFiles,
   type DashboardMcpPaths,
 } from "./operations";
+
+const panelArgsSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  source: z.string(),
+  formatter: z.string().optional(),
+  formatterSpec: formatterSpecSchema.optional(),
+});
 
 function result(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -35,38 +44,38 @@ export function createDashboardMcpServer(
   });
 
   server.registerTool(
-    "preview-panel-package",
-    {
-      description: "Validate an ephemeral panel package before user approval.",
-      inputSchema: z.object({
-        manifest: z.record(z.string(), z.unknown()),
-        schema: z.string(),
-        component: z.string(),
-        formatter: z.string().optional(),
-      }),
-    },
-    async (files) =>
-      result(
-        JSON.stringify(
-          await operations.previewPanelPackage(files as PanelPackageFiles),
-        ),
-      ),
-  );
-  server.registerTool(
-    "apply-panel-package",
+    "add-panel",
     {
       description:
-        "Persist an approved panel package and add its dashboard wiring.",
-      inputSchema: z.object({
-        manifest: z.record(z.string(), z.unknown()),
-        schema: z.string(),
-        component: z.string(),
-        formatter: z.string().optional(),
-      }),
+        "Add a new panel: pick a kind, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
+      inputSchema: panelArgsSchema,
     },
-    async (files) => {
-      await operations.applyPanelPackage(files as PanelPackageFiles);
-      return result("Panel package applied");
+    async (args) => {
+      await operations.addPanel(args);
+      return result("Panel added");
+    },
+  );
+  server.registerTool(
+    "edit-panel",
+    {
+      description: "Replace an existing panel's kind, source, and formatter.",
+      inputSchema: panelArgsSchema,
+    },
+    async (args) => {
+      await operations.editPanel(args);
+      return result("Panel edited");
+    },
+  );
+  server.registerTool(
+    "remove-panel",
+    {
+      description:
+        "Delete a panel and prune its dashboard wiring and arrangement.",
+      inputSchema: z.object({ id: z.string() }),
+    },
+    async ({ id }) => {
+      await operations.removePanel(id);
+      return result("Panel removed");
     },
   );
 
@@ -81,44 +90,43 @@ export function createDashboardMcpServer(
       result(JSON.stringify(await operations.refreshSource(source))),
   );
   server.registerTool(
-    "inspect-dashboard-configuration",
+    "read-dashboard-settings",
     {
-      description: "Read dashboard configuration when Settings permits it.",
+      description: "Read dashboard settings when Settings permits it.",
       inputSchema: z.object({}),
     },
-    async () => result(JSON.stringify(await operations.inspectConfiguration())),
+    async () =>
+      result(JSON.stringify(await operations.readDashboardSettings())),
   );
   server.registerTool(
-    "replace-dashboard-configuration",
+    "edit-dashboard-settings",
     {
       description:
-        "Replace dashboard configuration while preserving Settings-owned agent permissions.",
+        "Replace dashboard settings while preserving Settings-owned agent permissions.",
       inputSchema: z.object({ configuration: z.unknown() }),
     },
     async ({ configuration }) => {
-      await operations.replaceConfiguration(configuration);
-      return result("Dashboard configuration replaced");
+      await operations.editDashboardSettings(configuration);
+      return result("Dashboard settings updated");
     },
   );
   server.registerTool(
-    "read-dashboard-file",
+    "read-data-file",
     {
-      description:
-        "Read a dashboard artifact or data file when Settings permits it.",
+      description: "Read a file under data/ when Settings permits it.",
       inputSchema: z.object({ path: z.string() }),
     },
-    async ({ path }) => result(await operations.readArtifact(path)),
+    async ({ path }) => result(await operations.readDataFile(path)),
   );
   server.registerTool(
-    "write-dashboard-file",
+    "edit-data-file",
     {
-      description:
-        "Write a dashboard artifact or data file when Settings permits it.",
+      description: "Write a file under data/ when Settings permits it.",
       inputSchema: z.object({ path: z.string(), content: z.string() }),
     },
     async ({ path, content }) => {
-      await operations.writeArtifact(path, content);
-      return result("Dashboard file written");
+      await operations.editDataFile(path, content);
+      return result("Data file written");
     },
   );
 

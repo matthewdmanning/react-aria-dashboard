@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { renderDashboard, type DashboardConfiguration } from "../dashboard";
+import {
+  compileFormatterSpec,
+  renderDashboard,
+  type DashboardConfiguration,
+} from "../dashboard";
 import {
   loadDashboardConfiguration,
+  loadSources,
   saveDashboardConfiguration,
 } from "./dashboard-configuration-client";
 import {
   loadGoogleCalendarSource,
   refreshGoogleCalendar,
 } from "./google-calendar-client";
+import { formatIdentity } from "./formatters/identity";
 import { formatMessage } from "./formatters/message";
 import { includedPanelDefinitions } from "./panels";
 import { saveDashboardSettings, Settings } from "./Settings";
@@ -16,11 +22,13 @@ import { formatGoogleCalendar } from "./formatters/google-calendar";
 
 export function App() {
   const [configuration, setConfiguration] = useState<DashboardConfiguration>();
+  const [sources, setSources] = useState<Record<string, unknown>>();
   const [calendarSource, setCalendarSource] = useState<unknown>();
   const [calendarError, setCalendarError] = useState<string>();
 
   useEffect(() => {
     void loadDashboardConfiguration().then(setConfiguration);
+    void loadSources().then(setSources);
     void loadGoogleCalendarSource()
       .then(setCalendarSource)
       .catch((error: unknown) => {
@@ -30,20 +38,28 @@ export function App() {
       });
   }, []);
 
-  if (!configuration) return <p>Loading dashboard…</p>;
+  const formatters = useMemo(
+    () => ({
+      identity: formatIdentity,
+      message: formatMessage,
+      "google-calendar": formatGoogleCalendar,
+      ...Object.fromEntries(
+        Object.entries(configuration?.formatterSpecs ?? {}).map(
+          ([id, spec]) => [id, compileFormatterSpec(spec)],
+        ),
+      ),
+    }),
+    [configuration?.formatterSpecs],
+  );
+
+  if (!configuration || !sources) return <p>Loading dashboard…</p>;
 
   return (
     <>
       {renderDashboard(configuration, {
         panelDefinitions: includedPanelDefinitions,
-        sources: {
-          welcome: { text: "Dashboard architecture is ready." },
-          "google-calendar": calendarSource,
-        },
-        formatters: {
-          message: formatMessage,
-          "google-calendar": formatGoogleCalendar,
-        },
+        sources: { ...sources, "google-calendar": calendarSource },
+        formatters,
       })}
       <section aria-label="Google Calendar controls">
         <button

@@ -10,6 +10,36 @@ export interface PanelDefinition<T = unknown> {
 
 export type AgentAccess = "none" | "read" | "write";
 
+const fieldSpecSchema = z
+  .object({
+    from: z.array(z.string().min(1)).min(1),
+    default: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+    coerce: z.literal("string").optional(),
+  })
+  .strict();
+
+export const formatterSpecSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("object"),
+      fields: z.record(z.string(), fieldSpecSchema),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("array"),
+      from: z.array(z.string().min(1)).min(1),
+      into: z.string().min(1),
+      fields: z.record(z.string(), fieldSpecSchema),
+    })
+    .strict(),
+]);
+
+export type FormatterSpec = z.infer<typeof formatterSpecSchema>;
+type FieldSpec = z.infer<typeof fieldSpecSchema>;
+
+const builtInFormatterNames = ["identity", "message", "google-calendar"];
+
 const dashboardConfigurationSchema = z
   .object({
     version: z.literal(1),
@@ -28,6 +58,7 @@ const dashboardConfigurationSchema = z
       .object({
         configuration: z.enum(["none", "read", "write"]),
         data: z.enum(["none", "read", "write"]),
+        panels: z.enum(["none", "read", "write"]).default("none"),
       })
       .strict(),
     panels: z.array(
@@ -49,6 +80,7 @@ const dashboardConfigurationSchema = z
         .strict(),
     ),
     arrangement: z.array(z.string().min(1)),
+    formatterSpecs: z.record(z.string(), formatterSpecSchema).default({}),
   })
   .strict();
 
@@ -64,10 +96,12 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "read",
     data: "none",
+    panels: "none",
   },
   panels: [{ id: "welcome", title: "Dashboard", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
+  formatterSpecs: {},
 };
 
 export function parseDashboardConfiguration(
@@ -103,7 +137,87 @@ export function parseDashboardConfiguration(
     );
   }
 
+  if (
+    configuration.wiring.some(
+      ({ formatter }) =>
+        !builtInFormatterNames.includes(formatter) &&
+        !(formatter in configuration.formatterSpecs),
+    )
+  ) {
+    throw new Error(
+      "Invalid dashboard configuration: wiring references an unknown formatter",
+    );
+  }
+
   return configuration;
+}
+
+function resolvePath(root: unknown, path: string, index?: number): unknown {
+  let value: unknown = root;
+  for (const segment of path.split(".")) {
+    if (segment === "$index") {
+      value = index;
+      continue;
+    }
+    if (value === null || typeof value !== "object") return undefined;
+    value = (value as Record<string, unknown>)[segment];
+  }
+  return value;
+}
+
+function resolveField(
+  root: unknown,
+  spec: FieldSpec,
+  index: number | undefined,
+): [key: true, value: unknown] | [key: false] {
+  for (const path of spec.from) {
+    const value = resolvePath(root, path, index);
+    if (value !== undefined && value !== null) {
+      return [true, spec.coerce === "string" ? String(value) : value];
+    }
+  }
+  if (spec.default !== undefined) {
+    const value =
+      typeof spec.default === "string" && index !== undefined
+        ? spec.default.replace("$index", String(index))
+        : spec.default;
+    return [true, value];
+  }
+  return [false];
+}
+
+function applyFields(
+  root: unknown,
+  fields: Record<string, FieldSpec>,
+  index?: number,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, spec] of Object.entries(fields)) {
+    const [present, value] = resolveField(root, spec, index);
+    if (present) result[key] = value;
+  }
+  return result;
+}
+
+export function compileFormatterSpec(
+  spec: FormatterSpec,
+): (source: unknown) => unknown {
+  if (spec.kind === "object") {
+    return (source) => applyFields(source, spec.fields);
+  }
+  return (source) => {
+    let array: unknown;
+    for (const path of spec.from) {
+      array = resolvePath(source, path);
+      if (array !== undefined && array !== null) break;
+    }
+    const sourceArray = Array.isArray(array) ? array : [];
+    return {
+      [spec.into]: sourceArray.map((item, index) =>
+        applyFields(item, spec.fields, index),
+      ),
+    };
+  };
 }
 
 export interface DashboardRuntime {

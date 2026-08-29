@@ -17,10 +17,11 @@ const configuration: DashboardConfiguration = {
   integrations: [],
   theme: "calm",
   fontScale: 1,
-  agentPermissions: { configuration: "read", data: "none" },
+  agentPermissions: { configuration: "read", data: "none", panels: "none" },
   panels: [{ id: "welcome", title: "Welcome", definition: "message" }],
   wiring: [{ panelId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
+  formatterSpecs: {},
 };
 
 describe("Settings contract", () => {
@@ -44,6 +45,7 @@ describe("Settings contract", () => {
         agentPermissions: {
           configuration: "write",
           data: "read",
+          panels: "none",
         },
       },
       (candidate) => replaceDashboardConfiguration(path, candidate),

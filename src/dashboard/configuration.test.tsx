@@ -3,9 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 
 import {
+  compileFormatterSpec,
   parseDashboardConfiguration,
   renderDashboard,
   type DashboardConfiguration,
+  type FormatterSpec,
   type PanelDefinition,
 } from "./index";
 
@@ -23,6 +25,7 @@ const configuration: DashboardConfiguration = {
   agentPermissions: {
     configuration: "write",
     data: "write",
+    panels: "none",
   },
   panels: [
     { id: "first", title: "First", definition: "message" },
@@ -33,6 +36,7 @@ const configuration: DashboardConfiguration = {
     { panelId: "second", source: "second-source", formatter: "message" },
   ],
   arrangement: ["second", "first"],
+  formatterSpecs: {},
 };
 
 const message: PanelDefinition<{ message: string }> = {
@@ -65,6 +69,97 @@ describe("dashboard configuration contract", () => {
 
     expect(html).toContain(
       "<section><h2>Second</h2><p>Second message</p></section><section><h2>First</h2><p>First message</p></section>",
+    );
+  });
+
+  test("rejects wiring that references an unknown formatter", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        wiring: [
+          { panelId: "first", source: "first-source", formatter: "made-up" },
+          { panelId: "second", source: "second-source", formatter: "message" },
+        ],
+      }),
+    ).toThrow("unknown formatter");
+  });
+});
+
+describe("compileFormatterSpec", () => {
+  test("maps object fields with a fallback chain, default, and coercion", () => {
+    const spec: FormatterSpec = {
+      kind: "object",
+      fields: {
+        title: { from: ["summary", "title"], default: "Untitled" },
+        temperature: { from: ["temp"], coerce: "string" },
+        note: { from: ["missing"] },
+      },
+    };
+    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual({
+      title: "Standup",
+      temperature: "72",
+    });
+    expect(compileFormatterSpec(spec)({ temp: 0 })).toEqual({
+      title: "Untitled",
+      temperature: "0",
+    });
+  });
+
+  test("maps an array with $index and defaults to an empty array", () => {
+    const spec: FormatterSpec = {
+      kind: "array",
+      from: ["items"],
+      into: "events",
+      fields: {
+        id: { from: ["id", "$index"], coerce: "string" },
+        title: { from: ["summary"], default: "Untitled" },
+      },
+    };
+    expect(
+      compileFormatterSpec(spec)({ items: [{ summary: "Standup" }, { id: "x" }] }),
+    ).toEqual({
+      events: [
+        { id: "0", title: "Standup" },
+        { id: "x", title: "Untitled" },
+      ],
+    });
+    expect(compileFormatterSpec(spec)({ items: "not an array" })).toEqual({
+      events: [],
+    });
+  });
+
+  test("matches the hand-written Google Calendar formatter for equivalent input", async () => {
+    const { formatGoogleCalendar } = await import(
+      "../client/formatters/google-calendar"
+    );
+    const spec: FormatterSpec = {
+      kind: "array",
+      from: ["items"],
+      into: "events",
+      fields: {
+        id: { from: ["id"], default: "calendar-event-$index", coerce: "string" },
+        title: { from: ["summary"], default: "Untitled event", coerce: "string" },
+        start: {
+          from: ["start.dateTime", "start.date"],
+          default: "",
+          coerce: "string",
+        },
+        end: { from: ["end.dateTime", "end.date"], coerce: "string" },
+      },
+    };
+    const fixture = {
+      items: [
+        {
+          id: "abc",
+          summary: "Standup",
+          start: { dateTime: "2026-08-27T09:00:00Z" },
+          end: { dateTime: "2026-08-27T09:15:00Z" },
+        },
+        { start: { date: "2026-08-28" } },
+      ],
+    };
+    expect(compileFormatterSpec(spec)(fixture)).toEqual(
+      formatGoogleCalendar(fixture),
     );
   });
 });
