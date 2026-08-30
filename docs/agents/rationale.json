@@ -1,0 +1,10 @@
+{
+  "database": "Omitted; the dataset is too small to need one, and a local JSON file stays directly usable as context for local AI tools.",
+  "card template": "Defined in application source rather than authored through MCP, so the agent-facing surface has no field that can carry UI code.",
+  "display-role key": "Schema keys name how a value is displayed rather than what it means in a source domain, so a formatter can retarget new source data onto an existing template without new code.",
+  "react-aria-components": "Preferred over the react-aria and react-stately hooks. Rebuilding the benchmark card on hooks made it longer, there is no stepper hook, and announce() is not public API. Hooks remain a per-component escape hatch where the wrappers cannot emit the markup needed.",
+  "react-aria": "Not declared directly. It and react-stately are exact-pinned transitives of react-aria-components; declaring a different range installs duplicate copies and breaks context identity.",
+  "formatter": "Restricted to identity, a bundled function, or a declarative spec, so formatting is never arbitrary agent-authored code.",
+  "decision records": "No ADR directory. Pre-release decisions churn, and a superseded record left on disk misleads agents that grep for it. Current-state documents are edited in place instead, and reasons live here keyed by term.",
+  "templates directory": "Example source data shapes live at templates/ with placeholder content. The shape is what card templates are validated against; the content is never real."
+}
