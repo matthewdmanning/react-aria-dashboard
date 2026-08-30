@@ -9,7 +9,7 @@ import {
   type DashboardConfiguration,
   type FormatterSpec,
 } from "../dashboard";
-import { cardVariantSchemas } from "../dashboard/card-variants";
+import { cardTemplateSchemas } from "../dashboard/card-templates";
 import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,
@@ -33,7 +33,7 @@ export interface DashboardMcpPaths {
 export interface CardArgs {
   id: string;
   title: string;
-  variant: string;
+  template: string;
   source: string;
   formatter?: string;
   formatterSpec?: FormatterSpec;
@@ -110,8 +110,8 @@ export function createDashboardOperations(
     return spec ? compileFormatterSpec(spec) : undefined;
   }
 
-  async function validateAgainstVariant(
-    variant: string,
+  async function validateAgainstTemplate(
+    template: string,
     source: string,
     formatterFunction: ((source: unknown) => unknown) | undefined,
   ) {
@@ -120,12 +120,12 @@ export function createDashboardOperations(
     if (!formatterFunction) return;
     const formatted = formatterFunction(sourceData);
     const result =
-      cardVariantSchemas[variant as keyof typeof cardVariantSchemas].safeParse(
+      cardTemplateSchemas[template as keyof typeof cardTemplateSchemas].safeParse(
         formatted,
       );
     if (!result.success) {
       throw new Error(
-        `Formatted data does not match the '${variant}' card schema: ${result.error.message}`,
+        `Formatted data does not match the '${template}' card schema: ${result.error.message}`,
       );
     }
   }
@@ -137,8 +137,8 @@ export function createDashboardOperations(
     const configuration = await readConfiguration();
     requireCardsAccess(configuration, "write");
 
-    if (!(args.variant in cardVariantSchemas)) {
-      throw new Error(`Unknown card variant '${args.variant}'`);
+    if (!(args.template in cardTemplateSchemas)) {
+      throw new Error(`Unknown card template '${args.template}'`);
     }
 
     const alreadyExists = configuration.cards.some(
@@ -157,8 +157,8 @@ export function createDashboardOperations(
       : (args.formatter ?? "identity");
     if (args.formatterSpec) formatterSpecs[formatterKey] = args.formatterSpec;
 
-    await validateAgainstVariant(
-      args.variant,
+    await validateAgainstTemplate(
+      args.template,
       args.source,
       resolveFormatterFunction(formatterKey, formatterSpecs),
     );
@@ -166,7 +166,7 @@ export function createDashboardOperations(
     const cardEntry = {
       id: args.id,
       title: args.title,
-      definition: args.variant,
+      definition: args.template,
     };
     const wiringEntry = {
       cardId: args.id,

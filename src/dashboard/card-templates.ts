@@ -1,6 +1,6 @@
 import * as z from "zod/v4";
 
-export const cardVariantSchemas = {
+export const cardTemplateSchemas = {
   message: z
     .object({
       message: z.string(),
@@ -64,4 +64,4 @@ export const cardVariantSchemas = {
     .strict(),
 };
 
-export type CardVariant = keyof typeof cardVariantSchemas;
+export type CardTemplate = keyof typeof cardTemplateSchemas;

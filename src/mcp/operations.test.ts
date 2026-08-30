@@ -207,7 +207,7 @@ describe("dashboard MCP operations contract", () => {
     await operations.addCard({
       id: "weather",
       title: "Weather",
-      variant: "message",
+      template: "message",
       source: "weather",
     });
 
@@ -225,16 +225,16 @@ describe("dashboard MCP operations contract", () => {
     });
   });
 
-  test("rejects an unknown card variant", async () => {
+  test("rejects an unknown card template", async () => {
     const { operations } = await cardWorkspace();
     await expect(
       operations.addCard({
         id: "weather",
         title: "Weather",
-        variant: "made-up",
+        template: "made-up",
         source: "weather",
       }),
-    ).rejects.toThrow("Unknown card variant 'made-up'");
+    ).rejects.toThrow("Unknown card template 'made-up'");
   });
 
   test("rejects add-card for an id that already exists", async () => {
@@ -243,7 +243,7 @@ describe("dashboard MCP operations contract", () => {
     const args = {
       id: "weather",
       title: "Weather",
-      variant: "message",
+      template: "message",
       source: "weather",
     } as const;
     await operations.addCard(args);
@@ -260,7 +260,7 @@ describe("dashboard MCP operations contract", () => {
       operations.editCard({
         id: "weather",
         title: "Weather",
-        variant: "message",
+        template: "message",
         source: "weather",
       }),
     ).rejects.toThrow("Card 'weather' does not exist; use add-card");
@@ -272,14 +272,14 @@ describe("dashboard MCP operations contract", () => {
     await operations.addCard({
       id: "weather",
       title: "Weather",
-      variant: "message",
+      template: "message",
       source: "weather",
     });
 
     await operations.editCard({
       id: "weather",
       title: "Weather (updated)",
-      variant: "message",
+      template: "message",
       source: "weather",
     });
 
@@ -299,7 +299,7 @@ describe("dashboard MCP operations contract", () => {
     await operations.addCard({
       id: "weather",
       title: "Weather",
-      variant: "message",
+      template: "message",
       source: "weather",
     });
 
@@ -316,7 +316,7 @@ describe("dashboard MCP operations contract", () => {
     });
   });
 
-  test("rejects a formatterSpec whose output doesn't match the variant schema", async () => {
+  test("rejects a formatterSpec whose output doesn't match the card template schema", async () => {
     const { workspace, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { tempF: 72 });
 
@@ -324,7 +324,7 @@ describe("dashboard MCP operations contract", () => {
       operations.addCard({
         id: "weather",
         title: "Weather",
-        variant: "message",
+        template: "message",
         source: "weather",
         formatterSpec: {
           shape: "object",
@@ -334,14 +334,14 @@ describe("dashboard MCP operations contract", () => {
     ).rejects.toThrow("does not match the 'message' card schema");
   });
 
-  test("accepts a formatterSpec that reshapes source data to match the variant schema", async () => {
+  test("accepts a formatterSpec that reshapes source data to match the card template schema", async () => {
     const { workspace, configurationPath, operations } = await cardWorkspace();
     await writeSourceData(workspace, "weather", { tempF: 72 });
 
     await operations.addCard({
       id: "weather",
       title: "Weather",
-      variant: "message",
+      template: "message",
       source: "weather",
       formatterSpec: {
         shape: "object",
@@ -373,7 +373,7 @@ describe("dashboard MCP operations contract", () => {
       operations.addCard({
         id: "weather",
         title: "Weather",
-        variant: "message",
+        template: "message",
         source: "weather",
       }),
     ).resolves.toBeUndefined();
