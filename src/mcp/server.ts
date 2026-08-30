@@ -12,7 +12,7 @@ import {
 const cardArgsSchema = z.object({
   id: z.string(),
   title: z.string(),
-  variant: z.string(),
+  template: z.string(),
   source: z.string(),
   formatter: z.string().optional(),
   formatterSpec: formatterSpecSchema.optional(),
@@ -47,7 +47,7 @@ export function createDashboardMcpServer(
     "add-card",
     {
       description:
-        "Add a new card: pick a variant, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
+        "Add a new card: pick a card template, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
       inputSchema: cardArgsSchema,
     },
     async (args) => {
@@ -58,7 +58,7 @@ export function createDashboardMcpServer(
   server.registerTool(
     "edit-card",
     {
-      description: "Replace an existing card's variant, source, and formatter.",
+      description: "Replace an existing card's template, source, and formatter.",
       inputSchema: cardArgsSchema,
     },
     async (args) => {
