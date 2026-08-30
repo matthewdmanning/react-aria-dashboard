@@ -1,41 +1,53 @@
-# Dashboard Architecture
+# Architecture
 
-## Authority
-
-This document is the authoritative source for the dashboard architecture. It supersedes conflicting architecture statements in every other repository document. Other documents may specify product requirements, but they must not redefine the architecture established here.
+How this application is built and where each concern lives. Terms used here are defined in [`CONTEXT.md`](CONTEXT.md).
 
 ## Central principle
 
 The standalone dashboard MCP module provides the interface through which an agent can change any or all parts of a dashboard in response to user prompts.
 
-The dashboard is not one fixed object or universal data model. Its structure, data relationships, cards, code, presentation, and integrations may change when the agent implements the user's request.
+The dashboard is not one fixed object or universal data model. Its structure, data relationships, cards, presentation, and integrations may change when the agent implements the user's request.
 
-## Dashboard configuration
+## Technical direction
 
-Dashboard configuration is the persistent part of a dashboard — what remains when the data flowing through it changes.
+- The frontend uses React, TypeScript, and Vite.
+- React Aria Components provides accessible interaction behavior for complex controls.
+- Native HTML and CSS are used where they are sufficient.
+- CSS custom properties support the declarative theme system.
+- A small Node.js backend provides atomic JSON persistence, Google integrations, external-access authentication, and MCP tools.
+- There is no database.
 
-## Dashboard
+## Module map
 
-A dashboard specifies the arrangement or ordering of cards on a page or display.
+- `src/dashboard/` is the central domain module; callers use its interface through `index.ts`. It owns the configuration schema, validation, the card template registry, and formatter compilation.
+- `src/client/` contains the React UI, the card template components, and themes.
+- `src/server/` owns persistence, authentication, and external integrations.
+- `src/mcp/` owns the standalone MCP server and its tools.
 
-## Card template
+Runtime dashboard data and installed themes live at a configurable path outside `src/`.
 
-A card template is the reusable unit: a UI component paired with a JSON schema describing the input data the component displays. The component can render the contents of any data that fits the schema.
+## Card templates in the codebase
 
-A card template is self-contained and whole-widget in grain — a calendar, an Eisenhower plot, a weather widget — not a layout atom. Card templates compose into other card templates.
+A card template is split across two modules, and both halves must agree:
 
-By convention, a card template's schema keys name **how a value is displayed**, not what it means in a source domain: `COL_HEADER`, `LIST_ITEMS`, and so on. This is what lets source data be wired into an existing template without writing code — a formatter maps source fields onto display-role keys. A card template's schema may be empty, for a template that takes no input data.
+- `src/dashboard/card-templates.ts` holds each template's schema.
+- `src/client/cards/` holds each template's component, paired with its schema in a `CardDefinition`.
 
-A card template is responsible only for displaying properly formatted data. It does not extract, remove, or reformat source data.
+Adding a card template is an ordinary source change, reviewed like any other. The MCP interface does not expose it.
 
-## Card
+## Rendering path
 
-A card is a card template in use on a dashboard: an id, a title, a reference to a card template, a data source, a formatter, and the card's position and style.
+Source data reaches the screen through a fixed path:
 
-Moving a card, restyling it, or changing its inputs changes the card, never the card template. One card template backs any number of cards.
+1. A card names a source and a formatter.
+2. The formatter maps the source's shape onto the card template's display-role keys.
+3. The result is validated against the card template's schema.
+4. The card template's component renders it.
 
-## Agent responsibility
+The MCP server validates step 3 ahead of time wherever the formatter can be evaluated server-side — `identity` or a declarative spec — so a card is never persisted with data its template cannot render.
 
-In response to user prompts, the agent may create or change dashboard structure and card arrangement; cards — their template, data source, formatter, position, and style; dashboard data and data relationships; presentation, settings, and integrations; and any other part of the dashboard needed to fulfill the request.
+## MCP surface
 
-Sensitive data handling inside an agent-created card is outside this project's scope. Repository content must never expose sensitive field names or values.
+`src/mcp/` mutates cards, wiring, and arrangement. It never mutates card templates, which exist only in source.
+
+Agent access is governed by permissions stored in dashboard configuration, in three categories: `cards`, `data`, and `configuration`.
