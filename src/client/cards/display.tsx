@@ -1,11 +1,11 @@
 import type * as z from "zod/v4";
 
-import type { CardDefinition } from "../../dashboard";
+import type { CardTemplate } from "../../dashboard";
 import { cardTemplateSchemas } from "../../dashboard/card-templates";
 
 export type TableCardData = z.infer<typeof cardTemplateSchemas.table>;
 
-export const tableCard: CardDefinition<TableCardData> = {
+export const tableCard: CardTemplate<TableCardData> = {
   schema: cardTemplateSchemas.table,
   Component: ({ data }) => (
     <table>
@@ -33,7 +33,7 @@ export const tableCard: CardDefinition<TableCardData> = {
 
 export type ListCardData = z.infer<typeof cardTemplateSchemas.list>;
 
-export const listCard: CardDefinition<ListCardData> = {
+export const listCard: CardTemplate<ListCardData> = {
   schema: cardTemplateSchemas.list,
   Component: ({ data }) => (
     <ul>
@@ -51,7 +51,7 @@ export const listCard: CardDefinition<ListCardData> = {
 
 export type CalendarCardData = z.infer<typeof cardTemplateSchemas.calendar>;
 
-export const calendarCard: CardDefinition<CalendarCardData> = {
+export const calendarCard: CardTemplate<CalendarCardData> = {
   schema: cardTemplateSchemas.calendar,
   Component: ({ data }) => (
     <ul>
@@ -72,7 +72,7 @@ export const calendarCard: CardDefinition<CalendarCardData> = {
 
 export type ChartCardData = z.infer<typeof cardTemplateSchemas.chart>;
 
-export const chartCard: CardDefinition<ChartCardData> = {
+export const chartCard: CardTemplate<ChartCardData> = {
   schema: cardTemplateSchemas.chart,
   Component: ({ data }) => {
     const maximum = Math.max(1, ...data.series.map(({ value }) => value));

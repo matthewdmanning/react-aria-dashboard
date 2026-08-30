@@ -1,74 +1,31 @@
-# Repository Guidelines
+# Agent Router
 
-## Project Structure & Module Organization
+What you need, and where it lives. This file routes; it does not restate. Where a fact has a real source — `package.json`, the git log, the filesystem — go there rather than trusting a copy.
 
-This is a single-package, single-process TypeScript repository.
+## Read before working
 
-- `src/dashboard/` is the central domain module; callers use its interface through `index.ts`.
-- `src/client/` contains the React Aria UI, cards, and themes.
-- `src/server/` owns persistence, authentication, and external integrations.
-- `src/mcp/` owns the standalone MCP server and its tools.
-- Keep focused tests beside their modules; use `tests/` for whole-app behavior.
-- `examples/dashboard.json` is sample data, never the runtime source of truth.
-- `ARCHITECTURE.md` is the authoritative architecture document, domain vocabulary included, and supersedes conflicting statements elsewhere.
-- `agent-docs/` holds the product specification.
-- Runtime dashboard data and installed themes belong at a configurable path outside `src/`.
+| You need                                         | Read                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| What a term means                                | [`CONTEXT.md`](CONTEXT.md)                                                                       |
+| How the app is built, and where a concern lives  | [`ARCHITECTURE.md`](ARCHITECTURE.md)                                                             |
+| What the product must do, and what is still open | [`agent-docs/personal-dashboard-product-spec.md`](agent-docs/personal-dashboard-product-spec.md) |
+| Why a choice was made                            | [`docs/agents/rationale.json`](docs/agents/rationale.json), keyed by term                        |
+| How to write code here                           | [`docs/agents/conventions.md`](docs/agents/conventions.md)                                       |
+| What was researched, with sources                | [`docs/agents/research/`](docs/agents/research/)                                                 |
+| The MCP tool surface                             | [`docs/agents/mcp.md`](docs/agents/mcp.md)                                                       |
+| How issues are tracked                           | [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)                                   |
+| Triage labels                                    | [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)                                   |
+| Available commands                               | `package.json` scripts                                                                           |
+| Commit message style                             | Conventional Commits; see `git log`                                                              |
+| Example source data shapes                       | `templates/`                                                                                     |
+| What a finished card should look like            | `examples/` — unreviewed product examples, not patterns to copy                                  |
 
-Keep the dashboard general-purpose. Job-search and study data are examples, not permanent domain concepts.
+## Non-negotiables
 
-## Documentation Authority
+- Never commit credentials, tokens, personal content, real dashboard data, or sensitive field names or values. Fixtures are placeholder-only.
+- Keep the dashboard general-purpose. Job-search and study data are examples, never domain concepts.
+- Do not derive current requirements from material marked legacy, quarantined, superseded, archived, or backup.
 
-Before coding, read the active checkout's `ARCHITECTURE.md`, `AGENTS.md`, and relevant current product specification. Use the latest active documentation even when issues, comments, audits, old branches, memory, examples, tests, or implementation disagree. Stop and correct active documentation before coding if authoritative documents conflict.
+## When documents disagree
 
-Never derive current requirements from material marked legacy, quarantined, superseded, archived, or backup. Quarantined material is historical evidence only.
-
-For dependency and framework guidance, use current Context7 documentation before web search. If Context7 does not contain the needed documentation, record that limitation before using a web source.
-
-## Build, Test, and Development Commands
-
-- `npm run dev` starts Vite for local development.
-- `npm run build` typechecks and builds the application.
-- `npm run typecheck` runs TypeScript without emitting files.
-- `npm test` runs the automated test suite.
-- `npm run test:e2e` runs the Playwright checks.
-- `npm run mcp` starts the dashboard MCP server.
-
-Only document commands that have matching scripts in `package.json`.
-
-## Coding Style & Naming Conventions
-
-Use TypeScript for application code and React Aria Components for accessible complex controls. Prefer native HTML and CSS when sufficient. Use two-space indentation, `PascalCase` for React components, `camelCase` for functions and variables, and kebab-case filenames for documentation.
-
-No formatter or linter is configured yet. Add tool-specific rules here only after the tool is installed.
-
-## Testing Guidelines
-
-When coding a section governed by a contract, write its contract tests before implementing that section. Cover the interface functions and behaviors promised by the contract, then implement code that passes those tests and accomplishes the stated purpose.
-
-Every test must be load-bearing and represent a likely real use. Do not add tests for errors that would already necessarily fail through the runtime, compiler, or existing caller path. Code without a contract is not subject to a blanket test-first rule.
-
-Name focused colocated tests `*.test.ts` or `*.test.tsx`; reserve `tests/app.test.ts` for whole-app behavior.
-
-## Commit & Pull Request Guidelines
-
-Git history and commit conventions do not exist yet. Use short, imperative commit subjects, for example `Add dashboard payload validation`.
-
-Pull requests should explain the user-visible change, link the relevant GitHub issue, report verification performed, and include screenshots for interface changes. Keep unrelated changes in separate pull requests.
-
-## Security & Configuration
-
-Never commit credentials, tokens, local dashboard data, sensitive field names or values, or unencrypted cloud-backup contents. Example fixtures must contain no personal or sensitive data.
-
-## Agent skills
-
-### Issue tracker
-
-Issues and PRDs are tracked with GitHub Issues. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the five default triage labels. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This is a single-context repository. See `docs/agents/domain.md`.
+Each fact has exactly one home. Two documents stating the same fact is a bug — fix it by deleting one, not by deciding which wins.

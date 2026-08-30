@@ -9,7 +9,7 @@ import {
   renderDashboard,
   type DashboardConfiguration,
   type FormatterSpec,
-  type CardDefinition,
+  type CardTemplate,
 } from "./index";
 
 const configuration: DashboardConfiguration = {
@@ -29,8 +29,8 @@ const configuration: DashboardConfiguration = {
     cards: "none",
   },
   cards: [
-    { id: "first", title: "First", definition: "message" },
-    { id: "second", title: "Second", definition: "message" },
+    { id: "first", title: "First", template: "message" },
+    { id: "second", title: "Second", template: "message" },
   ],
   wiring: [
     { cardId: "first", source: "first-source", formatter: "message" },
@@ -40,7 +40,7 @@ const configuration: DashboardConfiguration = {
   formatterSpecs: {},
 };
 
-const message: CardDefinition<{ message: string }> = {
+const message: CardTemplate<{ message: string }> = {
   schema: z.object({ message: z.string() }),
   Component: ({ data }) => createElement("p", null, data.message),
 };
@@ -53,7 +53,7 @@ describe("dashboard configuration contract", () => {
   test("renders cards in arrangement order through separate formatter wiring", () => {
     const html = renderToStaticMarkup(
       renderDashboard(configuration, {
-        cardDefinitions: { message },
+        cardTemplates: { message },
         sources: {
           "first-source": { text: "First message" },
           "second-source": { text: "Second message" },

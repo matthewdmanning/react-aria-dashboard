@@ -98,8 +98,8 @@ describe("Settings configuration API contract", () => {
         body: JSON.stringify({
           ...defaultDashboardConfiguration,
           cards: [
-            { id: "welcome", title: "Dashboard", definition: "message" },
-            { id: "missing", title: "Missing", definition: "message" },
+            { id: "welcome", title: "Dashboard", template: "message" },
+            { id: "missing", title: "Missing", template: "message" },
           ],
           wiring: [
             { cardId: "welcome", source: "welcome", formatter: "message" },

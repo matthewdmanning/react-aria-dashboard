@@ -1,7 +1,7 @@
 import { createElement, type ComponentType, type ReactElement } from "react";
 import * as z from "zod/v4";
 
-export interface CardDefinition<T = unknown> {
+export interface CardTemplate<T = unknown> {
   schema: z.ZodType<T>;
   Component: ComponentType<{ data: T }>;
 }
@@ -66,7 +66,7 @@ const dashboardConfigurationSchema = z
         .object({
           id: z.string().min(1),
           title: z.string(),
-          definition: z.string().min(1),
+          template: z.string().min(1),
         })
         .strict(),
     ),
@@ -98,7 +98,7 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
     data: "none",
     cards: "none",
   },
-  cards: [{ id: "welcome", title: "Dashboard", definition: "message" }],
+  cards: [{ id: "welcome", title: "Dashboard", template: "message" }],
   wiring: [{ cardId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
   formatterSpecs: {},
@@ -221,7 +221,7 @@ export function compileFormatterSpec(
 }
 
 export interface DashboardRuntime {
-  cardDefinitions: Record<string, CardDefinition<any>>;
+  cardTemplates: Record<string, CardTemplate<any>>;
   sources: Record<string, unknown>;
   formatters: Record<string, (source: unknown) => unknown>;
 }
@@ -245,14 +245,10 @@ export function renderDashboard(
     ...configuration.arrangement.map((cardId) => {
       const card = cards.get(cardId)!;
       const connection = wiring.get(cardId)!;
-      const definition = runtime.cardDefinitions[card.definition];
+      const template = runtime.cardTemplates[card.template];
       const formatter = runtime.formatters[connection.formatter];
 
-      if (
-        !definition ||
-        !formatter ||
-        !(connection.source in runtime.sources)
-      ) {
+      if (!template || !formatter || !(connection.source in runtime.sources)) {
         throw new Error(
           `Dashboard runtime is missing wiring for card: ${cardId}`,
         );
@@ -263,7 +259,7 @@ export function renderDashboard(
         "section",
         { key: cardId },
         createElement("h2", null, card.title),
-        createElement(definition.Component, { data }),
+        createElement(template.Component, { data }),
       );
     }),
   );

@@ -216,7 +216,7 @@ describe("dashboard MCP operations contract", () => {
         JSON.parse(contents),
       ),
     ).resolves.toMatchObject({
-      cards: [{ id: "welcome" }, { id: "weather", definition: "message" }],
+      cards: [{ id: "welcome" }, { id: "weather", template: "message" }],
       wiring: [
         { cardId: "welcome" },
         { cardId: "weather", source: "weather", formatter: "identity" },

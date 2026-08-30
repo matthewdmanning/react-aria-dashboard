@@ -2,9 +2,9 @@
 
 ## Status
 
-Draft product specification based only on the decisions recorded in this conversation. Items without a decision are explicitly marked **Open**.
+Draft product specification: what the product must do. Items without a decision are explicitly marked **Open**.
 
-Architecture statements in this specification defer to [`ARCHITECTURE.md`](../ARCHITECTURE.md).
+This document does not describe how the product is built, and does not define terms. See [`ARCHITECTURE.md`](../ARCHITECTURE.md) and [`CONTEXT.md`](../CONTEXT.md).
 
 ## Product
 
@@ -13,15 +13,6 @@ A general dashboard for viewing and managing the user's chosen information and a
 The product is a one-page local web app whose application package is ready to run in a deployment environment. It does not have a separate landing or focus page. Building or provisioning cloud infrastructure is out of scope.
 
 The implementation is not constrained to a single static HTML file. A broader web framework or supporting toolchain may be used when needed to meet the product requirements.
-
-## Technical direction
-
-- The frontend uses React, TypeScript, and Vite.
-- React Aria Components provides accessible interaction behavior for complex controls.
-- Native HTML and CSS are used where they are sufficient.
-- CSS custom properties support the declarative theme system.
-- A small Node.js backend provides atomic JSON persistence, Google integrations, external-access authentication, and MCP tools.
-- The product does not use a database.
 
 ## Goals
 
@@ -67,8 +58,6 @@ These capabilities may be built sequentially.
 
 ## Dashboard configuration and Settings
 
-- Dashboard configuration persistently records integrations, the selected UI theme, font scaling, agent permissions, cards, card wiring, and card arrangement.
-- Dashboard configuration does not define one universal structure for card data, relationships, UI code, JSON Schemas, or formatter code.
 - Settings is the sole interface for adding, changing, and removing external-service integrations.
 - Settings is the sole interface for adding, changing, removing, and selecting themes.
 - Settings is the sole interface for changing font scaling.
@@ -80,15 +69,9 @@ These capabilities may be built sequentially.
 
 ## Cards and data wiring
 
-- A dashboard specifies the arrangement or ordering of cards on a page or display.
-- A card is an independent unit composed of a UI and a JSON Schema.
-- The UI can render any properly formatted data that fits the card's JSON Schema.
-- A card only displays properly formatted data.
-- Formatter code is separate from the card, even when only one card uses it.
-- A formatter may extract or reformat source data, including removing fields that the card does not need.
-- The agent creates and maintains the wiring between source data, formatter code, the card's JSON Schema, and the card UI.
-- The agent is responsible for ensuring the formatted data fits the schema and that the UI can render it.
-- Project-level validation or preview of formatter output is out of scope.
+- The agent creates and maintains the wiring between a source, a formatter, and a card.
+- The agent is responsible for ensuring formatted data fits its card template's schema.
+- Project-level preview of formatter output is out of scope.
 
 ## Agent interaction
 
@@ -97,7 +80,6 @@ These capabilities may be built sequentially.
 - The agentic tool surface includes an MCP interface.
 - Agent access to dashboard state is governed by permissions configured in Settings.
 - An agent session may be multi-step: the agent can ask follow-up questions before changing the dashboard.
-- In response to user prompts, an agent may change any or all parts of the dashboard.
 - Any agent action that changes a connected third-party service requires explicit user approval before it is applied.
 - Local AI tools are supported as an intended use case; cloud AI is optional.
 
@@ -162,7 +144,7 @@ The existing template's study-plan, calendar, and focus data shapes are specific
 - The encryption method, key ownership, recovery, and decryption behavior for cloud copies.
 - Google Drive authorization and sync behavior.
 - Cloud backup creation, retention, restoration, and overwrite behavior.
-- The MCP tool contract, transport, lifecycle, and detailed permission categories.
+- The MCP transport and lifecycle.
 - The authentication mechanism and external-access configuration.
 - Whether Settings may change authentication configuration.
 - Deployment packaging, runtime configuration, and production-readiness acceptance criteria.
