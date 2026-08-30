@@ -64,4 +64,4 @@ export const cardTemplateSchemas = {
     .strict(),
 };
 
-export type CardTemplate = keyof typeof cardTemplateSchemas;
+export type CardTemplateName = keyof typeof cardTemplateSchemas;

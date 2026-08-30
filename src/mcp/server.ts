@@ -58,7 +58,8 @@ export function createDashboardMcpServer(
   server.registerTool(
     "edit-card",
     {
-      description: "Replace an existing card's template, source, and formatter.",
+      description:
+        "Replace an existing card's template, source, and formatter.",
       inputSchema: cardArgsSchema,
     },
     async (args) => {

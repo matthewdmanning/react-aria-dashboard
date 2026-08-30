@@ -26,7 +26,10 @@ export async function replaceDashboardConfiguration(
   await mkdir(dirname(path), { recursive: true });
 
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(configuration, null, 2)}\n`);
+    await writeFile(
+      temporaryPath,
+      `${JSON.stringify(configuration, null, 2)}\n`,
+    );
     await rename(temporaryPath, path);
   } catch (error) {
     await unlink(temporaryPath).catch(() => undefined);

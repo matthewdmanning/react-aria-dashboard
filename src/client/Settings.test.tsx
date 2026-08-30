@@ -18,7 +18,7 @@ const configuration: DashboardConfiguration = {
   theme: "calm",
   fontScale: 1,
   agentPermissions: { configuration: "read", data: "none", cards: "none" },
-  cards: [{ id: "welcome", title: "Welcome", definition: "message" }],
+  cards: [{ id: "welcome", title: "Welcome", template: "message" }],
   wiring: [{ cardId: "welcome", source: "welcome", formatter: "message" }],
   arrangement: ["welcome"],
   formatterSpecs: {},

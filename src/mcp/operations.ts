@@ -120,9 +120,9 @@ export function createDashboardOperations(
     if (!formatterFunction) return;
     const formatted = formatterFunction(sourceData);
     const result =
-      cardTemplateSchemas[template as keyof typeof cardTemplateSchemas].safeParse(
-        formatted,
-      );
+      cardTemplateSchemas[
+        template as keyof typeof cardTemplateSchemas
+      ].safeParse(formatted);
     if (!result.success) {
       throw new Error(
         `Formatted data does not match the '${template}' card schema: ${result.error.message}`,
@@ -166,7 +166,7 @@ export function createDashboardOperations(
     const cardEntry = {
       id: args.id,
       title: args.title,
-      definition: args.template,
+      template: args.template,
     };
     const wiringEntry = {
       cardId: args.id,

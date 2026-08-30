@@ -1,4 +1,4 @@
-import type { CardDefinition } from "../../dashboard";
+import type { CardTemplate } from "../../dashboard";
 import type { cardTemplateSchemas } from "../../dashboard/card-templates";
 
 export { calendarCard, listCard, chartCard, tableCard } from "./display";
@@ -7,9 +7,9 @@ export { messageCard } from "./message";
 import { calendarCard, listCard, chartCard, tableCard } from "./display";
 import { messageCard } from "./message";
 
-export const includedCardDefinitions: Record<
+export const includedCardTemplates: Record<
   keyof typeof cardTemplateSchemas,
-  CardDefinition<any>
+  CardTemplate<any>
 > = {
   message: messageCard,
   table: tableCard,
