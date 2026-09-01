@@ -2,52 +2,13 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
 import {
-  cardTemplateSchemas,
+  cardSchema,
   dashboardSchema,
-  formatterSpecSchema,
+  integrationSchema,
+  themeSchema,
   type Mutation,
 } from "../contract";
 import type { DashboardService } from "../service";
-
-const cardTemplateNameSchema = z.enum(
-  Object.keys(cardTemplateSchemas) as [
-    keyof typeof cardTemplateSchemas,
-    ...(keyof typeof cardTemplateSchemas)[],
-  ],
-);
-
-const cardSchema = z
-  .object({
-    id: z.string().min(1),
-    title: z.string(),
-    template: cardTemplateNameSchema,
-    state: z.unknown(),
-    queries: z.array(
-      z
-        .object({
-          integration: z.string().min(1),
-          query: z.unknown(),
-          formatter: formatterSpecSchema,
-        })
-        .strict(),
-    ),
-  })
-  .strict();
-
-const themeSchema = z
-  .object({
-    id: z.string().min(1),
-    settings: z.record(z.string(), z.unknown()),
-  })
-  .strict();
-
-const integrationSchema = z
-  .object({
-    id: z.string().min(1),
-    type: z.string().min(1),
-    settings: z.record(z.string(), z.unknown()),
-  })
-  .strict();
 
 const readScopeSchema = z.enum([
   "all",
@@ -58,23 +19,34 @@ const readScopeSchema = z.enum([
   "roles",
 ]);
 
-function result(text: string) {
-  return { content: [{ type: "text" as const, text }] };
+function result(text: string, isError = false) {
+  return { content: [{ type: "text" as const, text }], isError };
 }
 
-export function createDashboardMcpServer(
-  service: DashboardService,
-  credential?: string,
-) {
+/**
+ * Service failures — denied permissions, unknown ids, refused removals — are
+ * answers the caller can act on, so they come back as tool results rather than
+ * protocol errors.
+ */
+async function reply(operation: () => Promise<string>) {
+  try {
+    return result(await operation());
+  } catch (error) {
+    return result(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+export function createDashboardMcpServer(service: DashboardService) {
   const server = new McpServer({
     name: "personal-dashboard",
     version: "0.0.0",
   });
 
-  async function apply(mutation: Mutation, message: string) {
-    await service.apply([mutation], credential);
-    return result(message);
-  }
+  const apply = (mutation: Mutation, message: string) =>
+    reply(async () => {
+      await service.apply([mutation]);
+      return message;
+    });
 
   server.registerTool(
     "read-dashboard",
@@ -85,7 +57,7 @@ export function createDashboardMcpServer(
       }),
     },
     async ({ scope }) =>
-      result(JSON.stringify(await service.read(scope, credential))),
+      reply(async () => JSON.stringify(await service.read(scope))),
   );
 
   server.registerTool(
@@ -123,7 +95,10 @@ export function createDashboardMcpServer(
     "patch-card-state",
     {
       description: "Patch the state displayed by an existing card.",
-      inputSchema: z.object({ cardId: z.string(), patch: z.unknown() }),
+      inputSchema: z.object({
+        cardId: z.string(),
+        patch: z.record(z.string(), z.unknown()),
+      }),
     },
     async ({ cardId, patch }) =>
       apply(
@@ -137,22 +112,24 @@ export function createDashboardMcpServer(
     {
       description: "Place an existing card on the dashboard.",
       inputSchema: z.object({
-        dashboardId: z.string(),
         cardId: z.string(),
         index: z.number().int().nonnegative().optional(),
       }),
     },
-    async ({ dashboardId, cardId, index }) =>
-      apply(
-        {
-          type: "insert-card",
-          permission: "presentation",
-          dashboardId,
-          cardId,
-          index,
-        },
-        "Card inserted",
-      ),
+    async ({ cardId, index }) =>
+      reply(async () => {
+        const { dashboard } = await service.read("presentation");
+        await service.apply([
+          {
+            type: "insert-card",
+            permission: "presentation",
+            dashboardId: dashboard.id,
+            cardId,
+            index,
+          },
+        ]);
+        return "Card inserted";
+      }),
   );
 
   server.registerTool(
