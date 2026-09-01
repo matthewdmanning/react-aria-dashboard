@@ -4,9 +4,11 @@
 
 **Work in progress. Deliberately ahead of the codebase.**
 
-This document does not need to agree with the code, with `ARCHITECTURE.md`, with `CONTEXT.md`, or with any other document, and a disagreement is not a bug to fix here. Those documents describe what exists; this one describes what was decided.
+This document does not need to agree with the code, and a disagreement is not a bug to fix here. The code describes what exists; this document describes what was decided.
 
-**When planning, this document is the authoritative source of truth.** Where it conflicts with anything else, it wins, and the other document is the one that has not caught up yet.
+`ARCHITECTURE.md` and `CONTEXT.md` have caught up — both were rewritten to these decisions in `cd8e98e` (#65), so they now describe the target rather than the tree. `ARCHITECTURE.md` carries a "Rewrite in progress" section mapping each module to what is actually in `src/` today.
+
+**When planning, this document is the authoritative source of truth.** Where it conflicts with anything else, it wins.
 
 Every item is settled. Nothing here is open.
 
@@ -90,7 +92,7 @@ A card carries nothing about where it sits or how big it is: no position, no siz
 
 A card is therefore portable: the same card can appear on a different dashboard without dragging a placement it no longer fits. This is what makes D9 possible.
 
-`CONTEXT.md`'s card definition currently ends "and the card's position and style" — that clause is deleted, not moved.
+`CONTEXT.md`'s card definition ended "and the card's position and style". That clause was deleted, not moved.
 
 A card carries its own state — see D18.
 
