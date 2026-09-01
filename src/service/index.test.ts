@@ -69,18 +69,24 @@ describe("dashboard service", () => {
   });
 
   test("rejects an unauthorized mutation without persisting any mutation", async () => {
-    const persistence = createMemoryPersistence();
+    const persistence = createMemoryPersistence(
+      withLocalPermissions({
+        data: "write",
+        cards: "write",
+        presentation: "none",
+        integrations: "write",
+        roles: "none",
+      }),
+    );
     const service = createService({ persistence });
 
     await expect(
       service.apply([
         {
-          type: "edit-role",
-          permission: "roles",
-          role: {
-            name: "viewer",
-            permissions: defaultDashboardConfiguration.roles[0].permissions,
-          },
+          type: "patch-card-state",
+          permission: "data",
+          cardId: "welcome",
+          patch: { message: "Updated" },
         },
         {
           type: "set-font-scale",
@@ -88,7 +94,7 @@ describe("dashboard service", () => {
           fontScale: 1.25,
         },
       ]),
-    ).rejects.toThrow("roles: write");
+    ).rejects.toThrow("presentation: write");
     expect(persistence.writes).toHaveLength(0);
   });
 
@@ -121,44 +127,6 @@ describe("dashboard service", () => {
     );
   });
 
-  test("does not let a caller widen its own role bundle", async () => {
-    const persistence = createMemoryPersistence({
-      ...defaultDashboardConfiguration,
-      roles: [
-        {
-          name: "local",
-          permissions: {
-            data: "write",
-            cards: "read",
-            presentation: "write",
-            integrations: "write",
-            roles: "write",
-          },
-        },
-      ],
-    });
-    const service = createService({ persistence });
-
-    await expect(
-      service.apply([
-        {
-          type: "edit-role",
-          permission: "roles",
-          role: {
-            name: "local",
-            permissions: {
-              data: "write",
-              cards: "write",
-              presentation: "write",
-              integrations: "write",
-              roles: "write",
-            },
-          },
-        },
-      ]),
-    ).rejects.toThrow("cannot grant 'cards: write'");
-    expect(persistence.writes).toHaveLength(0);
-  });
   test("read('all') returns only the categories the role may read", async () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
@@ -175,55 +143,6 @@ describe("dashboard service", () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
     await expect(service.read("roles")).rejects.toThrow("roles: read");
-  });
-
-  test("refuses to widen any role, not only the one the caller holds", async () => {
-    const persistence = createMemoryPersistence({
-      ...defaultDashboardConfiguration,
-      roles: [
-        {
-          name: "local",
-          permissions: {
-            data: "write",
-            cards: "read",
-            presentation: "write",
-            integrations: "write",
-            roles: "write",
-          },
-        },
-        {
-          name: "editor",
-          permissions: {
-            data: "read",
-            cards: "read",
-            presentation: "read",
-            integrations: "none",
-            roles: "none",
-          },
-        },
-      ],
-    });
-    const service = createService({ persistence });
-
-    await expect(
-      service.apply([
-        {
-          type: "edit-role",
-          permission: "roles",
-          role: {
-            name: "editor",
-            permissions: {
-              data: "read",
-              cards: "write",
-              presentation: "read",
-              integrations: "none",
-              roles: "none",
-            },
-          },
-        },
-      ]),
-    ).rejects.toThrow("cannot grant 'cards: write'");
-    expect(persistence.writes).toHaveLength(0);
   });
 
   test("requires presentation write to remove a card a dashboard holds", async () => {

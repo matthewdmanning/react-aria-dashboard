@@ -5,14 +5,12 @@ import {
   defaultDashboardConfiguration,
   mutationsSchema,
   parseDashboardConfiguration,
-  permissionCategorySchema,
   type Card,
   type Dashboard,
   type DashboardConfiguration,
   type Integration,
   type Mutation,
   type PermissionCategory,
-  type PermissionLevel,
   type Role,
   type Theme,
 } from "../contract";
@@ -207,10 +205,6 @@ async function applyMutations(
   for (const mutation of mutations) {
     requireWrite(role, mutation.permission);
 
-    if (mutation.type === "edit-role") {
-      requireNoWidening(role, mutation.role);
-    }
-
     // Removing a placed card rewrites the dashboards holding it, which is a
     // presentation write however it was reached.
     if (
@@ -230,15 +224,6 @@ async function applyMutations(
   return next;
 }
 
-const permissionCategories: readonly PermissionCategory[] =
-  permissionCategorySchema.options;
-
-const permissionRank: Record<PermissionLevel, number> = {
-  none: 0,
-  read: 1,
-  write: 2,
-};
-
 function requireRead(role: Role, category: PermissionCategory): void {
   if (role.permissions[category] === "none") {
     throw new Error(`Permission denied: ${category}: read`);
@@ -248,20 +233,6 @@ function requireRead(role: Role, category: PermissionCategory): void {
 function requireWrite(role: Role, category: PermissionCategory): void {
   if (role.permissions[category] !== "write") {
     throw new Error(`Permission denied: ${category}: write`);
-  }
-}
-
-/** No caller may write a role holding more than the bundle the caller holds. */
-function requireNoWidening(caller: Role, written: Role): void {
-  for (const category of permissionCategories) {
-    if (
-      permissionRank[written.permissions[category]] >
-      permissionRank[caller.permissions[category]]
-    ) {
-      throw new Error(
-        `Permission denied: role '${caller.name}' cannot grant '${category}: ${written.permissions[category]}'`,
-      );
-    }
   }
 }
 
@@ -372,18 +343,6 @@ function applyMutation(
       );
       return;
     }
-    case "edit-role":
-      replaceByName(configuration.roles, mutation.role);
-      return;
-    case "remove-role":
-      if (mutation.roleName === "local") {
-        throw new Error("Cannot remove the local role");
-      }
-      configuration.roles = removeByName(
-        configuration.roles,
-        mutation.roleName,
-      );
-      return;
   }
 }
 
@@ -430,20 +389,6 @@ function removeById<T extends { id: string }>(
   const remaining = values.filter((value) => value.id !== id);
   if (remaining.length === values.length) {
     throw new Error(`Unknown ${label}: ${id}`);
-  }
-  return remaining;
-}
-
-function replaceByName(values: Role[], replacement: Role): void {
-  const index = values.findIndex(({ name }) => name === replacement.name);
-  if (index === -1) throw new Error(`Unknown role: ${replacement.name}`);
-  values[index] = replacement;
-}
-
-function removeByName(values: Role[], name: string): Role[] {
-  const remaining = values.filter((value) => value.name !== name);
-  if (remaining.length === values.length) {
-    throw new Error(`Unknown role: ${name}`);
   }
   return remaining;
 }
