@@ -1,23 +1,27 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and PRDs for this repo live as GitHub issues. Use the connected GitHub integration for GitHub operations.
+
+Do not check or require local `gh` authentication before using the integration. The integration and the local CLI have separate authentication. Use `gh` only as a fallback when the integration is unavailable or cannot perform the required operation. Never use `Invoke-RestMethod`, `curl`, web search, or browser access to bypass that routing; if both approved paths fail, report the blocker.
 
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **Create an issue**: use the integration's issue-create operation.
+- **Read an issue**: use the integration's issue-read operation, including comments and labels.
+- **List issues**: use the integration's issue-search/list operation with the required label and state filters.
+- **Comment on an issue**: use the integration's issue-comment operation.
+- **Apply / remove labels**: use the integration's issue-label operation.
+- **Close**: use the integration's issue-update operation.
 
-Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
+The `gh issue ...` equivalents below are fallback commands only, not the primary procedure.
+
+Infer the repo from `git remote -v` when a fallback CLI command is necessary.
 
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
 
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
+When set to `yes`, PRs run through the same labels and states as issues, using the connected integration's PR operations. The `gh pr ...` equivalents are fallback commands only:
 
 - **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
 - **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
@@ -27,15 +31,17 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue through the connected integration.
 
 ## When a skill says "fetch the relevant ticket"
 
-Run `gh issue view <number> --comments`.
+Read the issue through the connected integration, including comments and labels. Fall back to `gh issue view <number> --comments` only if the integration cannot perform the read.
 
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+
+Use the connected integration for every GitHub operation in this section. The `gh` snippets are fallback CLI equivalents only.
 
 - **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
 - **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
