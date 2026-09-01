@@ -9,7 +9,7 @@ import {
   type DashboardConfiguration,
   type FormatterSpec,
 } from "../dashboard";
-import { cardTemplateSchemas } from "../dashboard/card-templates";
+import { cardTemplateSchemas } from "../contract";
 import {
   readDashboardConfiguration,
   replaceDashboardConfiguration,

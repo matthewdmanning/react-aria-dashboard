@@ -1,0 +1,133 @@
+import { describe, expect, test } from "vitest";
+
+import {
+  compileFormatterSpec,
+  mutationSchema,
+  parseDashboardConfiguration,
+  type DashboardConfiguration,
+  type FormatterSpec,
+} from "./index";
+
+const configuration: DashboardConfiguration = {
+  integrations: [
+    {
+      id: "calendar",
+      type: "google-calendar",
+      settings: { calendarId: "team" },
+    },
+  ],
+  themes: [{ id: "calm", settings: { density: "comfortable" } }],
+  dashboards: [
+    { id: "home", cards: ["first", "second"], theme: "calm" },
+  ],
+  fontScale: 1.1,
+  roles: [
+    {
+      name: "local",
+      permissions: {
+        data: "write",
+        cards: "write",
+        presentation: "read",
+        integrations: "read",
+        roles: "none",
+      },
+    },
+  ],
+  cards: [
+    {
+      id: "first",
+      title: "First",
+      template: "message",
+      state: { message: "First message" },
+      queries: [],
+    },
+    {
+      id: "second",
+      title: "Second",
+      template: "calendar",
+      state: { events: [] },
+      queries: [
+        {
+          integration: "calendar",
+          query: { calendarId: "team" },
+          formatter: {
+            shape: "array",
+            from: ["items"],
+            into: "events",
+            fields: {
+              title: { from: ["summary"] },
+            },
+          },
+        },
+      ],
+    },
+  ],
+};
+
+describe("dashboard contract", () => {
+  test("parses the settled configuration shape", () => {
+    expect(parseDashboardConfiguration(configuration)).toEqual(configuration);
+  });
+
+  test("rejects removed version, wiring, and arrangement fields", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        version: 1,
+        wiring: [],
+        arrangement: [],
+      }),
+    ).toThrow();
+  });
+
+  test("rejects dangling dashboard references", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        dashboards: [{ id: "home", cards: ["missing"], theme: "calm" }],
+      }),
+    ).toThrow("unknown card");
+  });
+
+  test("tags mutations with the permission category they require", () => {
+    expect(
+      mutationSchema.parse({
+        type: "patch-card-state",
+        permission: "data",
+        cardId: "first",
+        patch: { message: "Updated" },
+      }),
+    ).toMatchObject({ type: "patch-card-state", permission: "data" });
+  });
+});
+
+describe("compileFormatterSpec", () => {
+  test("maps object fields with fallback, default, and coercion", () => {
+    const spec: FormatterSpec = {
+      shape: "object",
+      fields: {
+        title: { from: ["summary", "title"], default: "Untitled" },
+        temperature: { from: ["temp"], coerce: "string" },
+      },
+    };
+
+    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual(
+      { title: "Standup", temperature: "72" },
+    );
+  });
+
+  test("maps arrays and substitutes the item index in defaults", () => {
+    const spec: FormatterSpec = {
+      shape: "array",
+      from: ["items"],
+      into: "events",
+      fields: {
+        id: { from: ["id"], default: "event-$index", coerce: "string" },
+      },
+    };
+
+    expect(compileFormatterSpec(spec)({ items: [{}, { id: "x" }] })).toEqual({
+      events: [{ id: "event-0" }, { id: "x" }],
+    });
+  });
+});

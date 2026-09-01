@@ -1,7 +1,7 @@
 import type * as z from "zod/v4";
 
 import type { CardTemplate } from "../../dashboard";
-import { cardTemplateSchemas } from "../../dashboard/card-templates";
+import { cardTemplateSchemas } from "../../contract";
 
 export type TableCardData = z.infer<typeof cardTemplateSchemas.table>;
 

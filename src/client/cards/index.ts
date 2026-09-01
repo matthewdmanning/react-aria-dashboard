@@ -1,5 +1,5 @@
 import type { CardTemplate } from "../../dashboard";
-import type { cardTemplateSchemas } from "../../dashboard/card-templates";
+import type { cardTemplateSchemas } from "../../contract";
 
 export { calendarCard, listCard, chartCard, tableCard } from "./display";
 export { messageCard } from "./message";
