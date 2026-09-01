@@ -6,7 +6,9 @@ Terms this project uses, and what each one means. Nothing else defines these; if
 
 An arrangement or ordering of cards on a page or display.
 
-Concretely, a dashboard is a document: an ordered set of card references plus a theme reference. It holds no card contents of its own — a card lives in one pool and any number of dashboards may reference it.
+Concretely, a dashboard is a document: an ordered set of card references plus a theme reference. It holds no card contents of its own — a card lives in one pool that the dashboard references into.
+
+There is one dashboard. It ships in the default configuration and cannot be created or deleted.
 
 ## Card template
 

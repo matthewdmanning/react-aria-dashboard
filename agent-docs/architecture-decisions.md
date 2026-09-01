@@ -232,6 +232,18 @@ Enforcement stays one lookup (D14). The mutation carries its category tag; the r
 
 Consequence: `edit-*` mutations no longer create what they cannot find. Creation needs an explicit `add-*`, which needs `write`. `add-theme` and `add-integration` exist because Settings manages both. Dashboards have no creation mutation yet.
 
+### D21 — One dashboard; it is not a multi-dashboard product
+
+Decided 2026-09-01.
+
+The application ships with one dashboard and offers no way to create or delete one. There is no mutation for either, and none is planned.
+
+The dashboard arrives in the default configuration, and every entrypoint hangs off it — Settings is reached from the dashboard, so "no dashboard exists" is not a state the UI has to handle.
+
+`dashboardConfigurationSchema` keeps its `dashboards` array. D9's shape is unchanged: a dashboard is a document holding ordered card references plus a theme reference, and a card sits in one pool. The array holds one entry today. Nothing is collapsed to a single object, because collapsing it would buy nothing and cost a schema change if this ever loosens.
+
+Consequence: `edit-dashboard` is the only dashboard mutation. It reorders card references and changes the theme reference.
+
 ---
 
 ## Frontier
