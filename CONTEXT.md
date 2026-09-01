@@ -8,7 +8,7 @@ An arrangement or ordering of cards on a page or display.
 
 Concretely, a dashboard is a document: an ordered set of card references plus a theme reference. It holds no card contents of its own — a card lives in one pool that the dashboard references into.
 
-There is one dashboard. It ships in the default configuration and cannot be created or deleted.
+There is one dashboard, held as a single object in dashboard configuration. It ships in the default configuration and cannot be created or deleted.
 
 ## Card template
 

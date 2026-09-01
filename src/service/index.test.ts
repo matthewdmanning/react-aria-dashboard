@@ -166,7 +166,7 @@ describe("dashboard service", () => {
 
     await expect(service.read("all")).resolves.toEqual({
       cards: defaultDashboardConfiguration.cards,
-      dashboards: defaultDashboardConfiguration.dashboards,
+      dashboard: defaultDashboardConfiguration.dashboard,
       themes: defaultDashboardConfiguration.themes,
       fontScale: defaultDashboardConfiguration.fontScale,
       integrations: defaultDashboardConfiguration.integrations,
@@ -206,7 +206,7 @@ describe("dashboard service", () => {
       service.apply([
         { type: "remove-card", permission: "cards", cardId: "welcome" },
       ]),
-    ).resolves.toMatchObject({ cards: [], dashboards: [{ cards: [] }] });
+    ).resolves.toMatchObject({ cards: [], dashboard: { cards: [] } });
   });
 
   test("creates a theme and refuses to add one twice", async () => {

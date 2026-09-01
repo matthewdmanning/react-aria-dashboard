@@ -75,7 +75,7 @@ The formatter runs on the way in, not at render time, so a card is never persist
 
 The service exposes two operations: `read(scope)` returns state, and `apply(mutations)` applies one or more mutations atomically. MCP tools and client actions are both mutation constructors.
 
-Mutations change cards, dashboards, themes, and integrations. They never change roles, card templates, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level.
+Mutations change cards, the dashboard, themes, and integrations. They never change roles, card templates, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level.
 
 Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to the role named `local`. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 

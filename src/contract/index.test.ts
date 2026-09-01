@@ -17,7 +17,7 @@ const configuration: DashboardConfiguration = {
     },
   ],
   themes: [{ id: "calm", settings: { density: "comfortable" } }],
-  dashboards: [{ id: "home", cards: ["first", "second"], theme: "calm" }],
+  dashboard: { id: "home", cards: ["first", "second"], theme: "calm" },
   fontScale: 1.1,
   roles: [
     {
@@ -82,7 +82,7 @@ describe("dashboard contract", () => {
     expect(() =>
       parseDashboardConfiguration({
         ...configuration,
-        dashboards: [{ id: "home", cards: ["missing"], theme: "calm" }],
+        dashboard: { id: "home", cards: ["missing"], theme: "calm" },
       }),
     ).toThrow("unknown card");
   });
