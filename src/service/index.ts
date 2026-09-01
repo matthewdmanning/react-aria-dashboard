@@ -11,6 +11,7 @@ import {
   type Integration,
   type Mutation,
   type PermissionCategory,
+  type PermissionLevel,
   type Role,
   type Theme,
 } from "../contract";
@@ -203,7 +204,7 @@ async function applyMutations(
   const role = await resolveRole(dependencies, configuration, credential);
 
   for (const mutation of mutations) {
-    requireWrite(role, mutation.permission);
+    requireLevel(role, mutation.permission, requiredLevel(mutation));
 
     // Removing a placed card rewrites the dashboards holding it, which is a
     // presentation write however it was reached.
@@ -213,7 +214,7 @@ async function applyMutations(
         cards.includes(mutation.cardId),
       )
     ) {
-      requireWrite(role, "presentation");
+      requireLevel(role, "presentation", "write");
     }
   }
 
@@ -230,10 +231,39 @@ function requireRead(role: Role, category: PermissionCategory): void {
   }
 }
 
-function requireWrite(role: Role, category: PermissionCategory): void {
-  if (role.permissions[category] !== "write") {
-    throw new Error(`Permission denied: ${category}: write`);
+const permissionRank: Record<PermissionLevel, number> = {
+  none: 0,
+  read: 1,
+  edit: 2,
+  write: 3,
+};
+
+function requireLevel(
+  role: Role,
+  category: PermissionCategory,
+  level: PermissionLevel,
+): void {
+  if (permissionRank[role.permissions[category]] < permissionRank[level]) {
+    throw new Error(`Permission denied: ${category}: ${level}`);
   }
+}
+
+/**
+ * `edit` changes something that already exists; `write` also creates and
+ * destroys. Every mutation not listed here needs `write`.
+ */
+const editLevelMutations = new Set<Mutation["type"]>([
+  "patch-card-state",
+  "edit-card",
+  "edit-dashboard",
+  "edit-theme",
+  "edit-integration",
+  "set-font-scale",
+  "insert-card",
+]);
+
+function requiredLevel(mutation: Mutation): PermissionLevel {
+  return editLevelMutations.has(mutation.type) ? "edit" : "write";
 }
 
 function applyMutation(

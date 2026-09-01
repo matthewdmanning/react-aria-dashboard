@@ -94,8 +94,42 @@ describe("dashboard service", () => {
           fontScale: 1.25,
         },
       ]),
-    ).rejects.toThrow("presentation: write");
+    ).rejects.toThrow("presentation: edit");
     expect(persistence.writes).toHaveLength(0);
+  });
+
+  test("lets an edit-level role change what exists but not create or destroy", async () => {
+    const persistence = createMemoryPersistence(
+      withLocalPermissions({
+        data: "edit",
+        cards: "edit",
+        presentation: "edit",
+        integrations: "edit",
+        roles: "none",
+      }),
+    );
+    const service = createService({ persistence });
+
+    await expect(
+      service.apply([
+        {
+          type: "patch-card-state",
+          permission: "data",
+          cardId: "welcome",
+          patch: { message: "Updated" },
+        },
+      ]),
+    ).resolves.toMatchObject({ cards: [{ state: { message: "Updated" } }] });
+
+    await expect(
+      service.apply([
+        {
+          type: "add-theme",
+          permission: "presentation",
+          theme: { id: "dark", settings: {} },
+        },
+      ]),
+    ).rejects.toThrow("presentation: write");
   });
 
   test("resolves credentialed callers before checking their role", async () => {

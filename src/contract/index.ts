@@ -8,7 +8,7 @@ const cardTemplateNameSchema = z.enum(
   Object.keys(cardTemplateSchemas) as [CardTemplateName, ...CardTemplateName[]],
 );
 
-const permissionLevelSchema = z.enum(["none", "read", "write"]);
+const permissionLevelSchema = z.enum(["none", "read", "edit", "write"]);
 
 export type PermissionLevel = z.infer<typeof permissionLevelSchema>;
 
