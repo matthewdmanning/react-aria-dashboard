@@ -42,7 +42,7 @@ The module map above is the target cut. The rewrite lands issue by issue, so par
 | `contract`       | Written, at `src/contract/`                           |
 | `service`        | Written, at `src/service/`                            |
 | `auth`           | Not written                                           |
-| `mcp`            | Not rewritten; `src/mcp/` is still the old surface    |
+| `mcp`            | Rewritten onto `service`, at `src/mcp/`; untested     |
 | `integrations`   | Not split out; lives under `src/server/integrations/` |
 | `view`           | Not renamed; lives at `src/client/`                   |
 | `card-templates` | Not split out; components live at `src/client/cards/` |
