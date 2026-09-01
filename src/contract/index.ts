@@ -238,22 +238,6 @@ const removeIntegrationMutationSchema = z
   })
   .strict();
 
-const editRoleMutationSchema = z
-  .object({
-    type: z.literal("edit-role"),
-    permission: z.literal("roles"),
-    role: roleSchema,
-  })
-  .strict();
-
-const removeRoleMutationSchema = z
-  .object({
-    type: z.literal("remove-role"),
-    permission: z.literal("roles"),
-    roleName: z.string().min(1),
-  })
-  .strict();
-
 const removeThemeMutationSchema = z
   .object({
     type: z.literal("remove-theme"),
@@ -276,8 +260,6 @@ export const mutationSchema = z.discriminatedUnion("type", [
   addIntegrationMutationSchema,
   editIntegrationMutationSchema,
   removeIntegrationMutationSchema,
-  editRoleMutationSchema,
-  removeRoleMutationSchema,
 ]);
 
 export type Mutation = z.infer<typeof mutationSchema>;
