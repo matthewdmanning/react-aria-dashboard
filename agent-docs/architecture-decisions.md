@@ -68,15 +68,15 @@ Recorded for history. D5 split offline behaviour along a structural line: cached
 
 Seven modules:
 
-| Module | Owns |
-| --- | --- |
-| `contract` | Dashboard configuration shape and validation, mutation types, formatter compilation, card template schemas, role bundle shape. No React, no Node — imported by every other module. |
-| `service` | The one interface. Role resolution and enforcement, persistence, applying mutations. |
-| `auth` | Accounts, credentials, account-to-role resolution. Separate store from dashboard data. |
-| `integrations` | Optional, user-authorized external-service connections, and backup targets. |
-| `view` | React application: rendering, Settings, offline cache, mutation queue, toast. |
-| `card-templates` | Card template components, paired with their schemas from `contract`. Split out on change cadence: these are added by source change, not through the service. |
-| `mcp` | Tool definitions. Calls `service`. |
+| Module           | Owns                                                                                                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contract`       | Dashboard configuration shape and validation, mutation types, formatter compilation, card template schemas, role bundle shape. No React, no Node — imported by every other module. |
+| `service`        | The one interface. Role resolution and enforcement, persistence, applying mutations.                                                                                               |
+| `auth`           | Accounts, credentials, account-to-role resolution. Separate store from dashboard data.                                                                                             |
+| `integrations`   | Optional, user-authorized external-service connections, and backup targets.                                                                                                        |
+| `view`           | React application: rendering, Settings, offline cache, mutation queue, toast.                                                                                                      |
+| `card-templates` | Card template components, paired with their schemas from `contract`. Split out on change cadence: these are added by source change, not through the service.                       |
+| `mcp`            | Tool definitions. Calls `service`.                                                                                                                                                 |
 
 `contract` is React-free by construction, since card template components live in `card-templates`.
 
@@ -106,7 +106,7 @@ No new vocabulary term: `CONTEXT.md` already defines a dashboard as "an arrangem
 
 The concept — a named set of semantic tokens (palette, fonts, spacing, density) whose swap changes every colour and font at once — is already in `CONTEXT.md` as **theme**. "Style" stops being a term anywhere in the project.
 
-A dashboard carries a theme *reference*; theme definitions live beside it in dashboard configuration.
+A dashboard carries a theme _reference_; theme definitions live beside it in dashboard configuration.
 
 ### D11 — "Wiring" is deleted
 
@@ -204,13 +204,13 @@ The questions this session opened, and where each landed. All settled.
 
 Five categories. `data` and `cards` are the shipped keys, unchanged; `configuration` is split three ways, because granting a role is a security change and adding an integration is not.
 
-| Category | Owns |
-| --- | --- |
-| `data` | Card state |
-| `cards` | Cards, including their queries and the formatter inside each |
-| `presentation` | Dashboards, themes, font scaling |
-| `integrations` | Integrations |
-| `roles` | Roles |
+| Category       | Owns                                                         |
+| -------------- | ------------------------------------------------------------ |
+| `data`         | Card state                                                   |
+| `cards`        | Cards, including their queries and the formatter inside each |
+| `presentation` | Dashboards, themes, font scaling                             |
+| `integrations` | Integrations                                                 |
+| `roles`        | Roles                                                        |
 
 Values are uniform `none | read | write` across every category; write implies read and includes delete. `roles` is not special-cased in the type — D3's no-widening rule guards it in `service`.
 
