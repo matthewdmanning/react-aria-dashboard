@@ -6,6 +6,7 @@ What you need, and where it lives. This file routes; it does not restate. Where 
 
 | You need                                         | Read                                                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| What was decided when planning — authoritative, ahead of the code | [`agent-docs/architecture-decisions.md`](agent-docs/architecture-decisions.md)   |
 | What a term means                                | [`CONTEXT.md`](CONTEXT.md)                                                                       |
 | How the app is built, and where a concern lives  | [`ARCHITECTURE.md`](ARCHITECTURE.md)                                                             |
 | What the product must do, and what is still open | [`agent-docs/personal-dashboard-product-spec.md`](agent-docs/personal-dashboard-product-spec.md) |
