@@ -17,9 +17,7 @@ const configuration: DashboardConfiguration = {
     },
   ],
   themes: [{ id: "calm", settings: { density: "comfortable" } }],
-  dashboards: [
-    { id: "home", cards: ["first", "second"], theme: "calm" },
-  ],
+  dashboards: [{ id: "home", cards: ["first", "second"], theme: "calm" }],
   fontScale: 1.1,
   roles: [
     {
@@ -89,6 +87,30 @@ describe("dashboard contract", () => {
     ).toThrow("unknown card");
   });
 
+  test("rejects card state that does not fit its card template", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        cards: [
+          { ...configuration.cards[0], state: { message: 42 } },
+          configuration.cards[1],
+        ],
+      }),
+    ).toThrow("does not fit card template 'message'");
+  });
+
+  test("rejects a card naming an unknown card template", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        cards: [
+          { ...configuration.cards[0], template: "nonexistent" },
+          configuration.cards[1],
+        ],
+      }),
+    ).toThrow();
+  });
+
   test("tags mutations with the permission category they require", () => {
     expect(
       mutationSchema.parse({
@@ -111,9 +133,9 @@ describe("compileFormatterSpec", () => {
       },
     };
 
-    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual(
-      { title: "Standup", temperature: "72" },
-    );
+    expect(
+      compileFormatterSpec(spec)({ summary: "Standup", temp: 72 }),
+    ).toEqual({ title: "Standup", temperature: "72" });
   });
 
   test("maps arrays and substitutes the item index in defaults", () => {
