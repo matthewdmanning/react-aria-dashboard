@@ -1,0 +1,324 @@
+import { describe, expect, test } from "vitest";
+
+import {
+  defaultDashboardConfiguration,
+  type DashboardConfiguration,
+  type Mutation,
+} from "../contract";
+import { createService, type DashboardPersistence } from "./index";
+
+function createMemoryPersistence(
+  initial = defaultDashboardConfiguration,
+): DashboardPersistence & {
+  writes: DashboardConfiguration[];
+} {
+  let configuration = structuredClone(initial);
+  const writes: DashboardConfiguration[] = [];
+
+  return {
+    writes,
+    read: async () => structuredClone(configuration),
+    write: async (next) => {
+      configuration = structuredClone(next);
+      writes.push(structuredClone(next));
+    },
+  };
+}
+
+function withLocalPermissions(
+  permissions: DashboardConfiguration["roles"][number]["permissions"],
+): DashboardConfiguration {
+  return {
+    ...defaultDashboardConfiguration,
+    roles: [{ name: "local", permissions }],
+  };
+}
+
+describe("dashboard service", () => {
+  test("reads the requested state when the caller has read access", async () => {
+    const persistence = createMemoryPersistence();
+    const service = createService({ persistence });
+
+    await expect(service.read("cards")).resolves.toEqual(
+      defaultDashboardConfiguration.cards,
+    );
+  });
+
+  test("applies authorized mutations atomically", async () => {
+    const persistence = createMemoryPersistence();
+    const service = createService({ persistence });
+    const mutations: Mutation[] = [
+      {
+        type: "patch-card-state",
+        permission: "data",
+        cardId: "welcome",
+        patch: { message: "Updated" },
+      },
+      {
+        type: "set-font-scale",
+        permission: "presentation",
+        fontScale: 1.25,
+      },
+    ];
+
+    await expect(service.apply(mutations)).resolves.toMatchObject({
+      fontScale: 1.25,
+      cards: [{ state: { message: "Updated" } }],
+    });
+    expect(persistence.writes).toHaveLength(1);
+  });
+
+  test("rejects an unauthorized mutation without persisting any mutation", async () => {
+    const persistence = createMemoryPersistence();
+    const service = createService({ persistence });
+
+    await expect(
+      service.apply([
+        {
+          type: "edit-role",
+          permission: "roles",
+          role: {
+            name: "viewer",
+            permissions: defaultDashboardConfiguration.roles[0].permissions,
+          },
+        },
+        {
+          type: "set-font-scale",
+          permission: "presentation",
+          fontScale: 1.25,
+        },
+      ]),
+    ).rejects.toThrow("roles: write");
+    expect(persistence.writes).toHaveLength(0);
+  });
+
+  test("resolves credentialed callers before checking their role", async () => {
+    const persistence = createMemoryPersistence({
+      ...defaultDashboardConfiguration,
+      roles: [
+        {
+          name: "reader",
+          permissions: {
+            data: "none",
+            cards: "read",
+            presentation: "none",
+            integrations: "none",
+            roles: "none",
+          },
+        },
+      ],
+    });
+    const service = createService({
+      persistence,
+      resolveAccount: (credential) => {
+        expect(credential).toBe("credential");
+        return { role: "reader" };
+      },
+    });
+
+    await expect(service.read("cards", "credential")).resolves.toEqual(
+      defaultDashboardConfiguration.cards,
+    );
+  });
+
+  test("does not let a caller widen its own role bundle", async () => {
+    const persistence = createMemoryPersistence({
+      ...defaultDashboardConfiguration,
+      roles: [
+        {
+          name: "local",
+          permissions: {
+            data: "write",
+            cards: "read",
+            presentation: "write",
+            integrations: "write",
+            roles: "write",
+          },
+        },
+      ],
+    });
+    const service = createService({ persistence });
+
+    await expect(
+      service.apply([
+        {
+          type: "edit-role",
+          permission: "roles",
+          role: {
+            name: "local",
+            permissions: {
+              data: "write",
+              cards: "write",
+              presentation: "write",
+              integrations: "write",
+              roles: "write",
+            },
+          },
+        },
+      ]),
+    ).rejects.toThrow("cannot grant 'cards: write'");
+    expect(persistence.writes).toHaveLength(0);
+  });
+  test("read('all') returns only the categories the role may read", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(service.read("all")).resolves.toEqual({
+      cards: defaultDashboardConfiguration.cards,
+      dashboards: defaultDashboardConfiguration.dashboards,
+      themes: defaultDashboardConfiguration.themes,
+      fontScale: defaultDashboardConfiguration.fontScale,
+      integrations: defaultDashboardConfiguration.integrations,
+    });
+  });
+
+  test("refuses a scoped read the role has no access to", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(service.read("roles")).rejects.toThrow("roles: read");
+  });
+
+  test("refuses to widen any role, not only the one the caller holds", async () => {
+    const persistence = createMemoryPersistence({
+      ...defaultDashboardConfiguration,
+      roles: [
+        {
+          name: "local",
+          permissions: {
+            data: "write",
+            cards: "read",
+            presentation: "write",
+            integrations: "write",
+            roles: "write",
+          },
+        },
+        {
+          name: "editor",
+          permissions: {
+            data: "read",
+            cards: "read",
+            presentation: "read",
+            integrations: "none",
+            roles: "none",
+          },
+        },
+      ],
+    });
+    const service = createService({ persistence });
+
+    await expect(
+      service.apply([
+        {
+          type: "edit-role",
+          permission: "roles",
+          role: {
+            name: "editor",
+            permissions: {
+              data: "read",
+              cards: "write",
+              presentation: "read",
+              integrations: "none",
+              roles: "none",
+            },
+          },
+        },
+      ]),
+    ).rejects.toThrow("cannot grant 'cards: write'");
+    expect(persistence.writes).toHaveLength(0);
+  });
+
+  test("requires presentation write to remove a card a dashboard holds", async () => {
+    const persistence = createMemoryPersistence(
+      withLocalPermissions({
+        data: "write",
+        cards: "write",
+        presentation: "none",
+        integrations: "write",
+        roles: "none",
+      }),
+    );
+    const service = createService({ persistence });
+
+    await expect(
+      service.apply([
+        { type: "remove-card", permission: "cards", cardId: "welcome" },
+      ]),
+    ).rejects.toThrow("presentation: write");
+    expect(persistence.writes).toHaveLength(0);
+  });
+
+  test("removing a placed card closes the hole it left in the dashboard", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        { type: "remove-card", permission: "cards", cardId: "welcome" },
+      ]),
+    ).resolves.toMatchObject({ cards: [], dashboards: [{ cards: [] }] });
+  });
+
+  test("creates a theme and refuses to add one twice", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        {
+          type: "add-theme",
+          permission: "presentation",
+          theme: { id: "dark", settings: { density: "compact" } },
+        },
+      ]),
+    ).resolves.toMatchObject({ themes: [{ id: "calm" }, { id: "dark" }] });
+
+    await expect(
+      service.apply([
+        {
+          type: "add-theme",
+          permission: "presentation",
+          theme: { id: "calm", settings: {} },
+        },
+      ]),
+    ).rejects.toThrow("Duplicate theme: calm");
+  });
+
+  test("creates an integration a card can then query", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        {
+          type: "add-integration",
+          permission: "integrations",
+          integration: {
+            id: "calendar",
+            type: "google-calendar",
+            settings: { calendarId: "team" },
+          },
+        },
+      ]),
+    ).resolves.toMatchObject({ integrations: [{ id: "calendar" }] });
+  });
+
+  test("edit mutations refuse to create what they cannot find", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        {
+          type: "edit-theme",
+          permission: "presentation",
+          theme: { id: "missing", settings: {} },
+        },
+      ]),
+    ).rejects.toThrow("Unknown theme: missing");
+  });
+
+  test("refuses to remove a theme a dashboard still names", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        { type: "remove-theme", permission: "presentation", themeId: "calm" },
+      ]),
+    ).rejects.toThrow("because dashboard 'home' uses it");
+  });
+});
