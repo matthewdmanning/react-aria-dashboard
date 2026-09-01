@@ -40,7 +40,7 @@ The module map above is the target cut. The rewrite lands issue by issue, so par
 | Module           | State                                                 |
 | ---------------- | ----------------------------------------------------- |
 | `contract`       | Written, at `src/contract/`                           |
-| `service`        | Not written                                           |
+| `service`        | Written, at `src/service/`                            |
 | `auth`           | Not written                                           |
 | `mcp`            | Not rewritten; `src/mcp/` is still the old surface    |
 | `integrations`   | Not split out; lives under `src/server/integrations/` |
@@ -75,8 +75,12 @@ The formatter runs on the way in, not at render time, so a card is never persist
 
 The service exposes two operations: `read(scope)` returns state, and `apply(mutations)` applies one or more mutations atomically. MCP tools and client actions are both mutation constructors.
 
-Mutations change cards, dashboards, themes, integrations, and roles. They never change card templates, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level.
+Mutations change cards, dashboards, themes, and integrations. They never change roles, card templates, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level.
 
-Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to the role named `local`. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, or `write`.
+Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to the role named `local`. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 
-Mutations in the security categories, `roles` and `integrations`, require a live service. Every other mutation queues offline and replays on reconnect.
+`edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. Every mutation carries its category and is checked against the caller's bundle at the level its type requires.
+
+`read(scope)` returns one category, or `all` for every category the caller may read — denied categories are omitted rather than failing the whole call, so a role short of one category still loads a dashboard.
+
+Mutations in `integrations` require a live service. Every other mutation queues offline and replays on reconnect. `roles` has no mutations to queue.

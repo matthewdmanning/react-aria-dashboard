@@ -50,7 +50,7 @@ A formatter is deterministic: same input, same output, no IO, nothing read from 
 
 A named change applied against current state — "mark this task complete" — rather than a snapshot of the state the caller last saw.
 
-Every write is a mutation. Because a mutation describes a change rather than a result, one that replays minutes late still applies correctly, with no version or staleness check. Each mutation type is tagged with the permission category it requires.
+Every write is a mutation. Because a mutation describes a change rather than a result, one that replays minutes late still applies correctly, with no version or staleness check. Each mutation type is tagged with the permission category it requires, and requires either `edit` or `write` in that category depending on whether it changes something that exists or creates and destroys.
 
 ## Dashboard configuration
 
@@ -68,9 +68,9 @@ Theme definitions live in dashboard configuration; a dashboard references one.
 
 ## Role
 
-A named bundle of permissions, assigned to an account. A role carries no credential and lives in dashboard configuration, edited through Settings.
+A named bundle of permissions, assigned to an account. A role carries no credential and lives in dashboard configuration. No mutation reaches a role: changing one is a source change, like adding a card template.
 
-A bundle covers five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, or `write`. Write implies read and includes delete.
+A bundle covers five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`. The levels are ranked and each implies the ones below it: `edit` changes something that already exists, and `write` also creates and deletes.
 
 ## Account
 
@@ -80,4 +80,4 @@ A caller arriving with no credential resolves to the role named `local`.
 
 ## Settings
 
-The interface through which a user directly manages integrations, themes, font scaling, and roles without involving an agent.
+The interface through which a user directly manages integrations, themes, and font scaling without involving an agent. Roles are not edited here — they are a source change.
