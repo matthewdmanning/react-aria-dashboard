@@ -128,7 +128,7 @@ export const dashboardConfigurationSchema = z
   .object({
     integrations: z.array(integrationSchema),
     themes: z.array(themeSchema),
-    dashboards: z.array(dashboardSchema),
+    dashboard: dashboardSchema,
     fontScale: z.number().min(0.75).max(2),
     roles: z.array(roleSchema),
     cards: z.array(cardSchema),
@@ -268,7 +268,7 @@ export const mutationsSchema = z.array(mutationSchema).min(1);
 export const defaultDashboardConfiguration: DashboardConfiguration = {
   integrations: [],
   themes: [{ id: "calm", settings: {} }],
-  dashboards: [{ id: "home", cards: ["welcome"], theme: "calm" }],
+  dashboard: { id: "home", cards: ["welcome"], theme: "calm" },
   fontScale: 1,
   roles: [
     {
@@ -313,10 +313,6 @@ export function parseDashboardConfiguration(
     "theme id",
   );
   assertUnique(
-    configuration.dashboards.map(({ id }) => id),
-    "dashboard id",
-  );
-  assertUnique(
     configuration.cards.map(({ id }) => id),
     "card id",
   );
@@ -331,22 +327,21 @@ export function parseDashboardConfiguration(
     configuration.integrations.map(({ id }) => id),
   );
 
-  for (const dashboard of configuration.dashboards) {
-    assertUnique(
-      dashboard.cards,
-      `card reference in dashboard '${dashboard.id}'`,
+  const { dashboard } = configuration;
+  assertUnique(
+    dashboard.cards,
+    `card reference in dashboard '${dashboard.id}'`,
+  );
+  if (!themeIds.has(dashboard.theme)) {
+    throw new Error(
+      `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown theme '${dashboard.theme}'`,
     );
-    if (!themeIds.has(dashboard.theme)) {
+  }
+  for (const cardId of dashboard.cards) {
+    if (!cardIds.has(cardId)) {
       throw new Error(
-        `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown theme '${dashboard.theme}'`,
+        `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown card '${cardId}'`,
       );
-    }
-    for (const cardId of dashboard.cards) {
-      if (!cardIds.has(cardId)) {
-        throw new Error(
-          `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown card '${cardId}'`,
-        );
-      }
     }
   }
 

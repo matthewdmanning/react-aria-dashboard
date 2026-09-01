@@ -240,7 +240,7 @@ The application ships with one dashboard and offers no way to create or delete o
 
 The dashboard arrives in the default configuration, and every entrypoint hangs off it — Settings is reached from the dashboard, so "no dashboard exists" is not a state the UI has to handle.
 
-`dashboardConfigurationSchema` keeps its `dashboards` array. D9's shape is unchanged: a dashboard is a document holding ordered card references plus a theme reference, and a card sits in one pool. The array holds one entry today. Nothing is collapsed to a single object, because collapsing it would buy nothing and cost a schema change if this ever loosens.
+`dashboardConfigurationSchema` holds `dashboard`, one object, not an array. D9's shape is unchanged: a dashboard is a document holding ordered card references plus a theme reference, and a card sits in one pool. The dashboard keeps its `id`, and `insert-card` still names it.
 
 Consequence: `edit-dashboard` is the only dashboard mutation. It reorders card references and changes the theme reference.
 

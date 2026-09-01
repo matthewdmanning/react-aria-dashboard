@@ -35,7 +35,7 @@ export interface ReadScopes {
   data: { id: string; state: unknown }[];
   cards: Card[];
   presentation: {
-    dashboards: Dashboard[];
+    dashboard: Dashboard;
     themes: Theme[];
     fontScale: number;
   };
@@ -151,7 +151,7 @@ async function readState<Scope extends ReadScope>(
     data: configuration.cards.map(({ id, state }) => ({ id, state })),
     cards: configuration.cards,
     presentation: {
-      dashboards: configuration.dashboards,
+      dashboard: configuration.dashboard,
       themes: configuration.themes,
       fontScale: configuration.fontScale,
     },
@@ -179,7 +179,7 @@ function projectReadable(
     readable.cards = configuration.cards;
   }
   if (role.permissions.presentation !== "none") {
-    readable.dashboards = configuration.dashboards;
+    readable.dashboard = configuration.dashboard;
     readable.themes = configuration.themes;
     readable.fontScale = configuration.fontScale;
   }
@@ -206,13 +206,11 @@ async function applyMutations(
   for (const mutation of mutations) {
     requireLevel(role, mutation.permission, requiredLevel(mutation));
 
-    // Removing a placed card rewrites the dashboards holding it, which is a
+    // Removing a placed card rewrites the dashboard holding it, which is a
     // presentation write however it was reached.
     if (
       mutation.type === "remove-card" &&
-      configuration.dashboards.some(({ cards }) =>
-        cards.includes(mutation.cardId),
-      )
+      configuration.dashboard.cards.includes(mutation.cardId)
     ) {
       requireLevel(role, "presentation", "write");
     }
@@ -292,18 +290,15 @@ function applyMutation(
         mutation.cardId,
         "card",
       );
-      for (const dashboard of configuration.dashboards) {
-        dashboard.cards = dashboard.cards.filter(
-          (id) => id !== mutation.cardId,
-        );
-      }
+      configuration.dashboard.cards = configuration.dashboard.cards.filter(
+        (id) => id !== mutation.cardId,
+      );
       return;
     case "insert-card": {
-      const dashboard = requireById(
-        configuration.dashboards,
-        mutation.dashboardId,
-        "dashboard",
-      );
+      const { dashboard } = configuration;
+      if (dashboard.id !== mutation.dashboardId) {
+        throw new Error(`Unknown dashboard: ${mutation.dashboardId}`);
+      }
       requireById(configuration.cards, mutation.cardId, "card");
       if (dashboard.cards.includes(mutation.cardId)) {
         throw new Error(
@@ -318,7 +313,10 @@ function applyMutation(
       return;
     }
     case "edit-dashboard":
-      replaceById(configuration.dashboards, mutation.dashboard, "dashboard");
+      if (configuration.dashboard.id !== mutation.dashboard.id) {
+        throw new Error(`Unknown dashboard: ${mutation.dashboard.id}`);
+      }
+      configuration.dashboard = mutation.dashboard;
       return;
     case "add-theme":
       addById(configuration.themes, mutation.theme, "theme");
@@ -327,10 +325,8 @@ function applyMutation(
       replaceById(configuration.themes, mutation.theme, "theme");
       return;
     case "remove-theme": {
-      const dashboard = configuration.dashboards.find(
-        ({ theme }) => theme === mutation.themeId,
-      );
-      if (dashboard) {
+      const { dashboard } = configuration;
+      if (dashboard.theme === mutation.themeId) {
         throw new Error(
           `Cannot remove theme '${mutation.themeId}' because dashboard '${dashboard.id}' uses it`,
         );
