@@ -242,9 +242,13 @@ See D16.
 
 Settled by D8, D10, D11, and D18. A card is an id, a title, a card template reference, its state, and zero or more queries.
 
-### F7 — Documentation targets — SETTLED
+### F7 — Documentation targets — SETTLED, DONE
 
-See D17. Both documents change in one pass with the rewrite. Currently wrong:
+See D17. Both documents change in one pass with the rewrite.
+
+**Done — both documents were updated in `cd8e98e` (#65). The list below is the
+work that was carried out, kept as a record of what changed and why. It is not
+outstanding.**
 
 `ARCHITECTURE.md`
 
