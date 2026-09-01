@@ -112,9 +112,6 @@ async function startServer() {
   const calendarDataPath =
     process.env.DASHBOARD_CALENDAR_DATA_PATH ??
     resolve(".dashboard/google-calendar.json");
-  // Must match the MCP server's data directory (src/mcp/operations.ts's
-  // dataFilePath) so a card wired to a source that edit-data-file wrote
-  // is actually visible here.
   const dataPath = resolve(process.env.DASHBOARD_WORKSPACE ?? ".", "data");
   const tokenProvider: GoogleCalendarTokenProvider = async () => {
     throw new Error("Google Calendar credentials are not configured");
