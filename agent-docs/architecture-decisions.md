@@ -12,6 +12,8 @@ This document does not need to agree with the code, and a disagreement is not a 
 
 Every item is settled. Nothing here is open.
 
+D19 and D20 were decided on 2026-09-01, after the session, while `service` was being written for #60. They are recorded here because this document is where decisions live, not because the session reopened.
+
 Scope of this session: the contracts between parts of the application. Vocabulary changes: `role`, `account`, `mutation`, and `query` are added; `source`, `wiring`, and `style` are deleted. Everything else is a term already in `CONTEXT.md`.
 
 Decisions are recorded as they were settled. The application is pre-alpha and non-functional: nothing is released, no stored data belongs to anyone, and nothing depends on current behaviour. So no decision here is constrained by back-compat, gradual migration, deprecation windows, or avoiding a name clash with what exists. Where a decision replaces something, the old thing is deleted outright.
@@ -43,14 +45,14 @@ There is no separate "developer" and "user" concept in the architecture. What di
 
 Split at the credential line:
 
-- **Roles** — name plus permission bundle — live in dashboard configuration and are edited through Settings. They carry no credential.
+- **Roles** — name plus permission bundle — live in dashboard configuration. They carry no credential. (D19 removed "and are edited through Settings": roles are changed at source.)
 - **Accounts** — credential plus assigned role name — live in the auth store, outside dashboard data.
 
 The service resolves account, then role, then permissions, on every call.
 
 This satisfies both product-spec constraints that were pulling apart: Settings remains the interface for changing agent permissions, and credentials and tokens stay out of dashboard data.
 
-The escalation guard follows: a write to dashboard configuration may not widen the role bundle held by the caller making it. This is an enforcement rule in `service`, not a shape in `contract`.
+The escalation guard followed: a write to dashboard configuration may not widen the role bundle held by the caller making it. D19 makes it moot — there is no write that reaches a role — and the guard was deleted from `service` rather than kept as dead enforcement.
 
 ### D4 — One enforcement point
 
@@ -196,6 +198,40 @@ Card state is stored already fitting the card template's schema, so rendering is
 
 Consequence: two cards showing the same calendar each hold their own query and their own copy. Accepted — cards stay self-contained per D8, no entity has two writers, and no merge rule is needed anywhere.
 
+### D19 — Roles are changed at source, not through the service
+
+Decided 2026-09-01, while implementing #60.
+
+No mutation reaches a role. `edit-role` and `remove-role` are deleted, and no `add-role` was ever written. Roles join card templates, built-in formatters, and packages: things a source change alters and the service cannot touch at any permission level.
+
+Consequences:
+
+- The `roles` permission category survives, read-only in effect. It still gates `read("roles")` and decides whether `read("all")` returns the role list.
+- D3's no-widening guard is gone. It existed to stop a role-editing write from granting itself more; with no such write, the guard was dead code.
+- Settings no longer edits roles. It keeps integrations, themes, and font scaling.
+- Changing a role means editing the persisted dashboard configuration or the source default, then restarting. Accepted for one human user (D7).
+
+This narrows D3. Roles still live in dashboard configuration, still carry no credential, and are still resolved on every call — only the editing path is withdrawn.
+
+### D20 — Four permission levels: `none`, `read`, `edit`, `write`
+
+Decided 2026-09-01, while implementing #60.
+
+`none < read < edit < write`, ranked. `edit` changes something that already exists; `write` also creates and destroys. Each level implies every level below it.
+
+The split falls on the mutation, not the category:
+
+| Level   | Mutations                                                                                                            |
+| ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `edit`  | `patch-card-state`, `edit-card`, `edit-dashboard`, `edit-theme`, `edit-integration`, `set-font-scale`, `insert-card` |
+| `write` | `add-card`, `remove-card`, `add-theme`, `remove-theme`, `add-integration`, `remove-integration`                      |
+
+The point is `data: edit` and `cards: edit`: a caller may change what a card shows without being able to add or delete cards. F1's categories gave blast radius by subject; this gives it by verb.
+
+Enforcement stays one lookup (D14). The mutation carries its category tag; the required level is read off the mutation type, and both are compared against the caller's bundle by rank.
+
+Consequence: `edit-*` mutations no longer create what they cannot find. Creation needs an explicit `add-*`, which needs `write`. `add-theme` and `add-integration` exist because Settings manages both. Dashboards have no creation mutation yet.
+
 ---
 
 ## Frontier
@@ -214,9 +250,9 @@ Five categories. `data` and `cards` are the shipped keys, unchanged; `configurat
 | `integrations` | Integrations                                                 |
 | `roles`        | Roles                                                        |
 
-Values are uniform `none | read | write` across every category; write implies read and includes delete. `roles` is not special-cased in the type — D3's no-widening rule guards it in `service`.
+Values are uniform across every category — see D20 for the levels. `roles` is not special-cased in the type; D19 makes it read-only in effect, because no mutation reaches a role.
 
-`data: write` ticks a task. `cards: write` adds, removes, retitles, or re-templates a card. Different blast radius, different key.
+`data: edit` ticks a task. `cards: write` adds, removes, retitles, or re-templates a card. Different blast radius, different key.
 
 Every writable thing in dashboard configuration maps to exactly one key.
 
