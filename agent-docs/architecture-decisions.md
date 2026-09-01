@@ -228,8 +228,6 @@ There is no upfront list. Mutation types are defined in `contract` as each one i
 
 Decisions to make while writing them:
 
-- whether a card-state mutation replaces state wholesale or patches it. Patching is what makes "tick task X" replay correctly after a query refreshed the card, which is why mutations were chosen (D13)
-- whether adding a card and placing it on a dashboard is one mutation or two
 - which mutations `mcp` exposes as tools, decided as the tools are written
 
 ### F4 — Version and staleness contract — SETTLED
