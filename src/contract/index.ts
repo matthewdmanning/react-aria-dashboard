@@ -190,6 +190,14 @@ const editDashboardMutationSchema = z
   })
   .strict();
 
+const addThemeMutationSchema = z
+  .object({
+    type: z.literal("add-theme"),
+    permission: z.literal("presentation"),
+    theme: themeSchema,
+  })
+  .strict();
+
 const editThemeMutationSchema = z
   .object({
     type: z.literal("edit-theme"),
@@ -203,6 +211,14 @@ const setFontScaleMutationSchema = z
     type: z.literal("set-font-scale"),
     permission: z.literal("presentation"),
     fontScale: z.number().min(0.75).max(2),
+  })
+  .strict();
+
+const addIntegrationMutationSchema = z
+  .object({
+    type: z.literal("add-integration"),
+    permission: z.literal("integrations"),
+    integration: integrationSchema,
   })
   .strict();
 
@@ -238,6 +254,14 @@ const removeRoleMutationSchema = z
   })
   .strict();
 
+const removeThemeMutationSchema = z
+  .object({
+    type: z.literal("remove-theme"),
+    permission: z.literal("presentation"),
+    themeId: z.string().min(1),
+  })
+  .strict();
+
 export const mutationSchema = z.discriminatedUnion("type", [
   cardStateMutationSchema,
   addCardMutationSchema,
@@ -245,8 +269,11 @@ export const mutationSchema = z.discriminatedUnion("type", [
   removeCardMutationSchema,
   insertCardMutationSchema,
   editDashboardMutationSchema,
+  addThemeMutationSchema,
   editThemeMutationSchema,
+  removeThemeMutationSchema,
   setFontScaleMutationSchema,
+  addIntegrationMutationSchema,
   editIntegrationMutationSchema,
   removeIntegrationMutationSchema,
   editRoleMutationSchema,
