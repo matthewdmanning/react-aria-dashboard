@@ -264,7 +264,8 @@ function requireRead(role: Role, category: PermissionCategory): void {
   }
 }
 
-const permissionRank: Record<PermissionLevel, number> = {
+/** Ranked so a caller's level can be compared against what a call requires (D20). */
+export const permissionRank: Record<PermissionLevel, number> = {
   none: 0,
   read: 1,
   edit: 2,
