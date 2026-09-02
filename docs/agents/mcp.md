@@ -2,8 +2,9 @@
 
 `src/mcp/` owns MCP tool definitions only. Each write tool constructs one
 contract mutation and calls `DashboardService.apply`; the read tool calls
-`DashboardService.read`. Persistence, authentication, authorization, and
-mutation application belong to `src/service/`.
+`DashboardService.read`. Persistence, authorization, and mutation application
+belong to `src/service/`; account and credential resolution belongs to
+`src/auth/`.
 
 The stdio entrypoint in `src/mcp/index.ts` composes a file-backed service and
 passes it to the MCP server. Run it with `npm run mcp`.
