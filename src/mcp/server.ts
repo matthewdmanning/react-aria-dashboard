@@ -12,6 +12,7 @@ import type { DashboardService } from "../service";
 
 const readScopeSchema = z.enum([
   "all",
+  "role",
   "data",
   "cards",
   "presentation",
@@ -51,7 +52,7 @@ export function createDashboardMcpServer(service: DashboardService) {
   server.registerTool(
     "read-dashboard",
     {
-      description: "Read the dashboard state allowed by the caller's role.",
+      description: "Read the dashboard state allowed by the caller's role. Scope 'role' returns the caller's own permissions.",
       inputSchema: z.object({
         scope: readScopeSchema.default("all"),
       }),

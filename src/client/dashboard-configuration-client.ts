@@ -1,9 +1,11 @@
 import {
   parseDashboardConfiguration,
   readableDashboardSchema,
+  roleSchema,
   type DashboardConfiguration,
   type Mutation,
   type ReadableDashboard,
+  type Role,
 } from "../contract";
 import { failureFrom } from "./request";
 
@@ -29,4 +31,11 @@ export async function applyDashboardMutations(
   });
   if (!response.ok) throw await failureFrom(response);
   return parseDashboardConfiguration(await response.json());
+}
+
+/** The caller's own role. Not gated — a caller may always see what it may do. */
+export async function loadCallerRole(): Promise<Role> {
+  const response = await fetch(`${endpoint}?scope=role`);
+  if (!response.ok) throw await failureFrom(response);
+  return roleSchema.parse(await response.json());
 }

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 
-import type { Mutation, ReadableDashboard, Theme } from "../contract";
+import type { Mutation, ReadableDashboard, Role, Theme } from "../contract";
 import {
   settingsMutations,
   type DashboardSettings,
@@ -8,9 +8,12 @@ import {
 
 export function Settings({
   dashboard,
+  callerRole,
   onSave,
 }: {
   dashboard: ReadableDashboard;
+  /** The caller's own role, so a user can see what this session may do. */
+  callerRole?: Role;
   onSave: (mutations: readonly Mutation[]) => Promise<void>;
 }) {
   const initial: DashboardSettings = {
@@ -203,6 +206,18 @@ export function Settings({
           >
             Connect
           </button>
+        </fieldset>
+      ) : null}
+
+      {callerRole ? (
+        <fieldset>
+          <legend>Your role</legend>
+          <h3>{callerRole.name}</h3>
+          {Object.entries(callerRole.permissions).map(([category, level]) => (
+            <p key={category}>
+              {category}: {level}
+            </p>
+          ))}
         </fieldset>
       ) : null}
 

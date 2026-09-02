@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  integrationSchema,
   compileFormatterSpec,
   mutationSchema,
   parseDashboardConfiguration,
@@ -109,6 +110,28 @@ describe("dashboard contract", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("integration settings", () => {
+  test("refuse a credential-shaped key, whatever it is called", () => {
+    for (const key of ["apiKey", "access_token", "clientSecret", "password"]) {
+      expect(() =>
+        integrationSchema.parse({
+          id: "connection",
+          type: "example-service",
+          settings: { [key]: "value" },
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      integrationSchema.parse({
+        id: "connection",
+        type: "example-service",
+        settings: { region: "eu" },
+      }),
+    ).not.toThrow();
   });
 });
 

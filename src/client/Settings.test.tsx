@@ -7,10 +7,15 @@ import { Settings } from "./Settings";
 
 function render(
   dashboard: Parameters<typeof Settings>[0]["dashboard"],
-  onSave: (mutations: readonly Mutation[]) => Promise<void> = async () =>
-    undefined,
+  callerRole?: Parameters<typeof Settings>[0]["callerRole"],
 ) {
-  return renderToStaticMarkup(createElement(Settings, { dashboard, onSave }));
+  return renderToStaticMarkup(
+    createElement(Settings, {
+      dashboard,
+      callerRole,
+      onSave: async () => undefined,
+    }),
+  );
 }
 
 /** The markup of one fieldset, so a control elsewhere cannot satisfy the test. */
@@ -31,6 +36,30 @@ describe("Settings contract", () => {
     expect(html).toContain("Font scale");
     expect(html).not.toContain("Integrations");
     expect(html).not.toContain("Roles");
+  });
+
+  test("shows the caller its own role, read-only", () => {
+    const own = fieldset(
+      render(
+        {},
+        {
+          name: "local",
+          permissions: {
+            data: "write",
+            cards: "write",
+            presentation: "write",
+            integrations: "write",
+            roles: "none",
+          },
+        },
+      ),
+      "Your role",
+    );
+
+    expect(own).toContain("local");
+    expect(own).toContain("roles: none");
+    expect(own).not.toContain("<select");
+    expect(own).not.toContain("<button");
   });
 
   test("renders roles read-only, with no control to change one", () => {
