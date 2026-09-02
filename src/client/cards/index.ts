@@ -13,10 +13,14 @@ export { messageCard } from "./message";
 import { calendarCard, listCard, chartCard, tableCard } from "./display";
 import { messageCard } from "./message";
 
-export const includedCardTemplates: Record<
-  keyof typeof cardTemplateSchemas,
-  CardTemplate<any>
-> = {
+/** Each component's data type is derived from its schema, never asserted. */
+export type IncludedCardTemplates = {
+  [Name in keyof typeof cardTemplateSchemas]: CardTemplate<
+    z.infer<(typeof cardTemplateSchemas)[Name]>
+  >;
+};
+
+export const includedCardTemplates: IncludedCardTemplates = {
   message: messageCard,
   table: tableCard,
   list: listCard,

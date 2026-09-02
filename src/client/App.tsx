@@ -6,7 +6,7 @@ import {
   loadReadableDashboard,
 } from "./dashboard-configuration-client";
 import { refreshIntegrations } from "./integrations-client";
-import { includedCardTemplates } from "./cards";
+import { CardView } from "./cards/CardView";
 import { Settings } from "./Settings";
 
 function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
@@ -24,11 +24,10 @@ function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
       {dashboard.cards.map((cardId) => {
         const card = byId.get(cardId);
         if (!card) return null;
-        const Component = includedCardTemplates[card.template].Component;
         return (
           <section key={card.id}>
             <h2>{card.title}</h2>
-            <Component data={card.state as never} />
+            <CardView template={card.template} state={card.state} />
           </section>
         );
       })}
