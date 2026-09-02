@@ -1,8 +1,6 @@
 import {
-  parseDashboardConfiguration,
   readableDashboardSchema,
   roleSchema,
-  type DashboardConfiguration,
   type Mutation,
   type ReadableDashboard,
   type Role,
@@ -21,16 +19,17 @@ export async function loadReadableDashboard(): Promise<ReadableDashboard> {
   return readableDashboardSchema.parse(await response.json());
 }
 
+/** Returns the same projection `loadReadableDashboard` does — see its note. */
 export async function applyDashboardMutations(
   mutations: readonly Mutation[],
-): Promise<DashboardConfiguration> {
+): Promise<ReadableDashboard> {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(mutations),
   });
   if (!response.ok) throw await failureFrom(response);
-  return parseDashboardConfiguration(await response.json());
+  return readableDashboardSchema.parse(await response.json());
 }
 
 /** The caller's own role. Not gated — a caller may always see what it may do. */

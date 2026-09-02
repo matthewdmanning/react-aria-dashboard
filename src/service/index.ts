@@ -75,10 +75,15 @@ export interface DashboardService {
     scope: Scope,
     credential?: string,
   ): Promise<ReadScopes[Scope]>;
+  /**
+   * Returns the same projection `read("all")` would — the categories the
+   * caller may read, denied ones omitted — never the full configuration
+   * regardless of what changed.
+   */
   apply(
     mutations: readonly Mutation[],
     credential?: string,
-  ): Promise<DashboardConfiguration>;
+  ): Promise<ReadScopes["all"]>;
 }
 
 export function createService(dependencies: Dependencies): DashboardService {
@@ -197,10 +202,17 @@ async function readState<Scope extends ReadScope>(
  * `all` returns the categories the role may read rather than demanding every
  * category, so the shipped `local` role — write on everything except `roles` —
  * can still load a whole dashboard.
+ *
+ * `apply` projects its result the same way (`allowEmpty: true`): a role that
+ * may change something it cannot read — `data: edit`, `read` otherwise
+ * `none` everywhere — must not be handed a `permission-denied` for a
+ * mutation that just succeeded. An empty projection is the honest answer:
+ * it changed something, and may read nothing back.
  */
 function projectReadable(
   configuration: DashboardConfiguration,
   role: Role,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
 ): Partial<DashboardConfiguration> {
   const readable: Partial<DashboardConfiguration> = {};
 
@@ -219,7 +231,7 @@ function projectReadable(
   }
   if (role.permissions.roles !== "none") readable.roles = configuration.roles;
 
-  if (Object.keys(readable).length === 0) {
+  if (Object.keys(readable).length === 0 && !allowEmpty) {
     throw new ServiceFailure("permission-denied", "Permission denied: read");
   }
   return readable;
@@ -229,7 +241,7 @@ async function applyMutations(
   dependencies: Dependencies,
   input: readonly Mutation[],
   credential: string | undefined,
-): Promise<DashboardConfiguration> {
+): Promise<ReadScopes["all"]> {
   const mutations = mutationsSchema.parse(input);
   const configuration = await readConfiguration(dependencies.persistence);
   const role = await resolveRole(dependencies, configuration, credential);
@@ -252,7 +264,7 @@ async function applyMutations(
   for (const mutation of mutations) applyMutation(candidate, mutation);
   const next = parseDashboardConfiguration(candidate);
   await dependencies.persistence.write(next);
-  return next;
+  return projectReadable(next, role, { allowEmpty: true });
 }
 
 function requireRead(role: Role, category: PermissionCategory): void {

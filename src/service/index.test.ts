@@ -66,6 +66,58 @@ describe("dashboard service", () => {
     expect(persistence.writes).toHaveLength(1);
   });
 
+  test("never leaks a category the caller may not read back through apply", async () => {
+    const persistence = createMemoryPersistence(
+      withLocalPermissions({
+        data: "write",
+        cards: "write",
+        presentation: "write",
+        integrations: "write",
+        roles: "none",
+      }),
+    );
+    const service = createService({ persistence });
+
+    const result = await service.apply([
+      { type: "set-font-scale", fontScale: 1.5 },
+    ]);
+
+    expect(result).not.toHaveProperty("roles");
+  });
+
+  test("a caller who may change what it cannot otherwise read still gets an answer, not a throw", async () => {
+    // `data: edit` alone lets a caller patch card state; every other category
+    // is `none`. Reading `cards` piggybacks on `data` (see the ponytail note
+    // by `projectReadable`), so this projection is not literally empty — but
+    // it must resolve, not throw `permission-denied`, the way a bare
+    // `read("all")` would for a role that may read nothing at all.
+    const persistence = createMemoryPersistence(
+      withLocalPermissions({
+        data: "edit",
+        cards: "none",
+        presentation: "none",
+        integrations: "none",
+        roles: "none",
+      }),
+    );
+    const service = createService({ persistence });
+
+    const result = await service.apply([
+      {
+        type: "patch-card-state",
+        cardId: "welcome",
+        patch: { message: "Updated" },
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      cards: [{ state: { message: "Updated" } }],
+    });
+    expect(result).not.toHaveProperty("dashboard");
+    expect(result).not.toHaveProperty("integrations");
+    expect(result).not.toHaveProperty("roles");
+  });
+
   test("rejects an unauthorized mutation without persisting any mutation", async () => {
     const persistence = createMemoryPersistence(
       withLocalPermissions({
