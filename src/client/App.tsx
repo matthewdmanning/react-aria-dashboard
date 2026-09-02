@@ -72,7 +72,10 @@ export function App() {
                 if (failed.length > 0) {
                   setRefreshError(
                     failed
-                      .map(({ id, message }) => `${id}: ${message ?? "failed"}`)
+                      .map(
+                        ({ cardId, message }) =>
+                          `${cardId}: ${message ?? "failed"}`,
+                      )
                       .join(", "),
                   );
                 }
