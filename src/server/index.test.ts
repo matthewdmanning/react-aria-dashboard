@@ -11,7 +11,7 @@ import {
 } from "../service";
 import {
   handleDashboardConfigurationRequest,
-  handleGoogleCalendarRequest,
+  handleIntegrationRefreshRequest,
 } from "./index";
 
 function createMemoryPersistence(
@@ -80,37 +80,74 @@ describe("dashboard service HTTP transport", () => {
   });
 });
 
-describe("Google Calendar endpoint", () => {
-  test("refreshes using integrations read through the service", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "calendar-api-"));
-    const dataPath = join(directory, "calendar.json");
+describe("integration refresh endpoint", () => {
+  test("pulls every integration read through the service", async () => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), "integration-api-"));
     const source = { items: [{ id: "event-1", summary: "Planning" }] };
-    const fetchCalendar = vi.fn(async () => Response.json(source));
+    const pull = vi.fn(async () => Response.json(source));
     const service = createTestService({
       ...defaultDashboardConfiguration,
       integrations: [
         {
-          id: "calendar",
+          id: "team-calendar",
+          type: "google-calendar",
+          settings: { calendarId: "team" },
+        },
+        { id: "unknown", type: "not-built-in", settings: {} },
+      ],
+    });
+
+    const response = await handleIntegrationRefreshRequest(
+      new Request("http://dashboard/api/integrations/refresh", {
+        method: "POST",
+      }),
+      dataDirectory,
+      { service, tokenProvider: async () => "access-token", fetch: pull },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      { id: "team-calendar", status: "refreshed" },
+      { id: "unknown", status: "unsupported" },
+    ]);
+    await expect(
+      readFile(join(dataDirectory, "team-calendar.json"), "utf8"),
+    ).resolves.toContain('"summary": "Planning"');
+  });
+
+  test("reports one integration's failure without stopping the rest", async () => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), "integration-api-"));
+    const service = createTestService({
+      ...defaultDashboardConfiguration,
+      integrations: [
+        {
+          id: "team-calendar",
           type: "google-calendar",
           settings: { calendarId: "team" },
         },
       ],
     });
 
-    const response = await handleGoogleCalendarRequest(
-      new Request("http://dashboard/api/google-calendar", { method: "POST" }),
-      dataPath,
+    const response = await handleIntegrationRefreshRequest(
+      new Request("http://dashboard/api/integrations/refresh", {
+        method: "POST",
+      }),
+      dataDirectory,
       {
         service,
-        tokenProvider: async () => "access-token",
-        fetch: fetchCalendar,
+        tokenProvider: async () => {
+          throw new Error("Credentials are not configured");
+        },
       },
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(source);
-    await expect(readFile(dataPath, "utf8")).resolves.toContain(
-      '"summary": "Planning"',
-    );
+    await expect(response.json()).resolves.toEqual([
+      {
+        id: "team-calendar",
+        status: "failed",
+        message: "Credentials are not configured",
+      },
+    ]);
   });
 });

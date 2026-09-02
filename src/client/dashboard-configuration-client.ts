@@ -1,31 +1,21 @@
-import * as z from "zod/v4";
-
 import {
   parseDashboardConfiguration,
-  roleSchema,
+  readableDashboardSchema,
   type DashboardConfiguration,
   type Mutation,
-  type Role,
+  type ReadableDashboard,
 } from "../contract";
 
 const endpoint = "/api/dashboard-configuration";
 
-async function read(scope: string) {
-  const response = await fetch(`${endpoint}?scope=${scope}`);
+/**
+ * Returns the categories this caller may read. Denied categories are absent
+ * rather than empty, so the caller can tell "not permitted" from "none exist".
+ */
+export async function loadReadableDashboard(): Promise<ReadableDashboard> {
+  const response = await fetch(`${endpoint}?scope=all`);
   if (!response.ok) throw new Error(await response.text());
-  return response.json();
-}
-
-export async function loadDashboardConfiguration(): Promise<DashboardConfiguration> {
-  const payload = await read("all");
-  return parseDashboardConfiguration({ roles: [], ...payload });
-}
-
-export async function loadDashboardRoles(): Promise<Role[] | undefined> {
-  const response = await fetch(`${endpoint}?scope=roles`);
-  if (response.status === 403) return undefined;
-  if (!response.ok) throw new Error(await response.text());
-  return z.array(roleSchema).parse(await response.json());
+  return readableDashboardSchema.parse(await response.json());
 }
 
 export async function applyDashboardMutations(
