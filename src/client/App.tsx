@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { ReadableDashboard, Role } from "../contract";
+import type { Mutation, ReadableDashboard, Role } from "../contract";
 import {
   applyDashboardMutations,
   loadCallerRole,
@@ -8,6 +8,15 @@ import {
 } from "./dashboard-configuration-client";
 import { refreshIntegrations } from "./integrations-client";
 import { CardView } from "./cards/CardView";
+import {
+  enqueue,
+  pendingMutationCount,
+  readCachedDashboard,
+  replayQueue,
+  requiresLiveService,
+  writeCachedDashboard,
+} from "./offline";
+import { RequestFailure } from "./request";
 import { Settings } from "./Settings";
 
 function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
@@ -41,23 +50,80 @@ export function App() {
   const [callerRole, setCallerRole] = useState<Role>();
   const [error, setError] = useState<string>();
   const [refreshError, setRefreshError] = useState<string>();
+  const [offline, setOffline] = useState(false);
+  const [pendingCount, setPendingCount] = useState(
+    pendingMutationCount(localStorage),
+  );
+
+  async function sync(): Promise<void> {
+    const { dropped } = await replayQueue(localStorage, applyDashboardMutations);
+    setPendingCount(pendingMutationCount(localStorage));
+    if (dropped.length > 0) {
+      setRefreshError(dropped.map((failure) => failure.message).join(", "));
+    }
+  }
 
   useEffect(() => {
     void loadReadableDashboard()
-      .then(setDashboard)
+      .then((loaded) => {
+        setDashboard(loaded);
+        setOffline(false);
+        writeCachedDashboard(localStorage, loaded);
+        return sync();
+      })
       .catch((reason: unknown) => {
-        setError(
-          reason instanceof Error ? reason.message : "Could not load dashboard",
-        );
+        if (reason instanceof RequestFailure) {
+          setError(reason.message);
+          return;
+        }
+        const cached = readCachedDashboard(localStorage);
+        if (!cached) {
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load dashboard",
+          );
+          return;
+        }
+        setDashboard(cached);
+        setOffline(true);
       });
     void loadCallerRole().then(setCallerRole);
+
+    const handleOnline = () => void sync().then(() => setOffline(false));
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
   }, []);
+
+  async function saveMutations(mutations: readonly Mutation[]): Promise<void> {
+    try {
+      const result = await applyDashboardMutations(mutations);
+      setDashboard(result);
+      writeCachedDashboard(localStorage, result);
+      setOffline(false);
+    } catch (reason) {
+      // `integrations` mutations require a live service (D15) and are never
+      // queued — the caller sees this failure directly.
+      if (reason instanceof RequestFailure || requiresLiveService(mutations)) {
+        throw reason;
+      }
+      enqueue(localStorage, mutations);
+      setPendingCount(pendingMutationCount(localStorage));
+      setOffline(true);
+    }
+  }
 
   if (error) return <p role="alert">{error}</p>;
   if (!dashboard) return <p>Loading dashboard…</p>;
 
   return (
     <>
+      {offline ? (
+        <p role="status">
+          Offline — {pendingCount} change{pendingCount === 1 ? "" : "s"}{" "}
+          pending
+        </p>
+      ) : null}
       {renderDashboard(dashboard)}
       <section aria-label="Integrations">
         <button
@@ -96,9 +162,7 @@ export function App() {
         <Settings
           dashboard={dashboard}
           callerRole={callerRole}
-          onSave={async (mutations) =>
-            setDashboard(await applyDashboardMutations(mutations))
-          }
+          onSave={saveMutations}
         />
       </details>
     </>
