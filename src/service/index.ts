@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import type { AccountStore } from "../auth";
 import {
   defaultDashboardConfiguration,
   mutationsSchema,
@@ -21,14 +22,6 @@ export interface DashboardPersistence {
   write(configuration: DashboardConfiguration): Promise<void>;
 }
 
-export interface Account {
-  role: string;
-}
-
-export type AccountResolver = (
-  credential: string,
-) => Account | undefined | Promise<Account | undefined>;
-
 /** What `read` returns for each scope. `all` omits categories the role cannot read. */
 export interface ReadScopes {
   all: Partial<DashboardConfiguration>;
@@ -47,7 +40,7 @@ export type ReadScope = keyof ReadScopes;
 
 interface Dependencies {
   persistence: DashboardPersistence;
-  resolveAccount?: AccountResolver;
+  accountStore?: AccountStore;
 }
 
 export interface DashboardService {
@@ -121,18 +114,19 @@ async function resolveRole(
   configuration: DashboardConfiguration,
   credential: string | undefined,
 ): Promise<Role> {
-  let account: Account | undefined = { role: "local" };
+  let roleName = "local";
 
   if (credential !== undefined) {
-    if (!dependencies.resolveAccount) {
+    if (!dependencies.accountStore) {
       throw new Error("Authentication is not configured");
     }
-    account = await dependencies.resolveAccount(credential);
+    const account = await dependencies.accountStore.resolve(credential);
     if (!account) throw new Error("Unknown credential");
+    roleName = account.role;
   }
 
-  const role = configuration.roles.find(({ name }) => name === account.role);
-  if (!role) throw new Error(`Unknown role: ${account.role}`);
+  const role = configuration.roles.find(({ name }) => name === roleName);
+  if (!role) throw new Error(`Unknown role: ${roleName}`);
   return role;
 }
 

@@ -150,9 +150,11 @@ describe("dashboard service", () => {
     });
     const service = createService({
       persistence,
-      resolveAccount: (credential) => {
-        expect(credential).toBe("credential");
-        return { role: "reader" };
+      accountStore: {
+        resolve: async (credential) => {
+          expect(credential).toBe("credential");
+          return { credential, role: "reader" };
+        },
       },
     });
 
