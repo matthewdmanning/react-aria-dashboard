@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
-import { createFileAccountStore } from "./index";
+import { createFileAuthStore } from "./index";
 
-describe("account store", () => {
+describe("auth store", () => {
   test("resolves accounts without reading dashboard data", async () => {
     const directory = await mkdtemp(join(tmpdir(), "auth-store-"));
     const path = join(directory, "accounts.json");
@@ -17,7 +17,7 @@ describe("account store", () => {
       ]),
     );
 
-    const store = createFileAccountStore(path);
+    const store = createFileAuthStore(path);
 
     await expect(store.resolve("credential")).resolves.toEqual({
       credential: "credential",
@@ -26,9 +26,9 @@ describe("account store", () => {
     await expect(store.resolve("missing")).resolves.toBeUndefined();
   });
 
-  test("treats a missing account store as having no accounts", async () => {
+  test("treats a missing auth store as having no accounts", async () => {
     const directory = await mkdtemp(join(tmpdir(), "auth-store-"));
-    const store = createFileAccountStore(join(directory, "accounts.json"));
+    const store = createFileAuthStore(join(directory, "accounts.json"));
 
     await expect(store.resolve("credential")).resolves.toBeUndefined();
   });
@@ -45,7 +45,7 @@ describe("account store", () => {
     );
 
     await expect(
-      createFileAccountStore(path).resolve("credential"),
+      createFileAuthStore(path).resolve("credential"),
     ).rejects.toThrow("duplicate credential");
   });
 });

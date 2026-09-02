@@ -7,7 +7,13 @@ belong to `src/service/`; account and credential resolution belongs to
 `src/auth/`.
 
 The stdio entrypoint in `src/mcp/index.ts` composes a file-backed service and
-passes it to the MCP server. Run it with `npm run mcp`.
+passes it to the MCP server. Run it with `npm run mcp`. It reads the dashboard
+from `DASHBOARD_DATA_PATH` and the auth store from `DASHBOARD_AUTH_STORE_PATH`,
+both defaulting under `DASHBOARD_WORKSPACE`.
+
+The stdio caller sends no credential, so it resolves to the `local` role today.
+The auth store is composed here because this is where an authenticated door
+would be wired; it is not reached until a caller supplies a credential.
 
 ## Registered tools
 

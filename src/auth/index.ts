@@ -12,7 +12,7 @@ const accountsSchema = z.array(accountSchema);
 
 export type Account = z.infer<typeof accountSchema>;
 
-export interface AccountStore {
+export interface AuthStore {
   resolve(credential: string): Promise<Account | undefined>;
 }
 
@@ -20,7 +20,7 @@ export interface AccountStore {
  * Reads accounts on every lookup so the service sees store changes without
  * keeping credentials or role assignments in dashboard data.
  */
-export function createFileAccountStore(path: string): AccountStore {
+export function createFileAuthStore(path: string): AuthStore {
   return {
     async resolve(credential) {
       let accounts: Account[];
@@ -39,9 +39,12 @@ export function createFileAccountStore(path: string): AccountStore {
         new Set(accounts.map(({ credential: value }) => value)).size !==
         accounts.length
       ) {
-        throw new Error("Invalid account store: duplicate credential");
+        throw new Error("Invalid auth store: duplicate credential");
       }
 
+      // ponytail: plaintext credential, non-constant-time compare. Fine while
+      // the only door is a local stdio caller; hash the stored credential and
+      // compare with timingSafeEqual before a network door reaches this.
       return accounts.find((account) => account.credential === credential);
     },
   };

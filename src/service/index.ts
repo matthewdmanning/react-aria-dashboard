@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import type { AccountStore } from "../auth";
+import type { AuthStore } from "../auth";
 import {
   defaultDashboardConfiguration,
   mutationsSchema,
@@ -40,7 +40,7 @@ export type ReadScope = keyof ReadScopes;
 
 interface Dependencies {
   persistence: DashboardPersistence;
-  accountStore?: AccountStore;
+  authStore?: AuthStore;
 }
 
 export interface DashboardService {
@@ -117,10 +117,10 @@ async function resolveRole(
   let roleName = "local";
 
   if (credential !== undefined) {
-    if (!dependencies.accountStore) {
+    if (!dependencies.authStore) {
       throw new Error("Authentication is not configured");
     }
-    const account = await dependencies.accountStore.resolve(credential);
+    const account = await dependencies.authStore.resolve(credential);
     if (!account) throw new Error("Unknown credential");
     roleName = account.role;
   }
