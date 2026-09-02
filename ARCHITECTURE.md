@@ -47,8 +47,6 @@ The module map above is the target cut. The rewrite lands issue by issue, so par
 | `view`           | Not renamed; lives at `src/client/`; on `service`     |
 | `card-templates` | Not split out; components live at `src/client/cards/` |
 
-`src/dashboard/` is superseded and now orphaned: nothing outside it imports it, and only its own test still runs against it. It defines a configuration schema carrying `version`, `wiring`, `arrangement`, and `agentPermissions`, which `contract` replaces. Delete it rather than extending it, and do not read it as a description of the target.
-
 Delete this section when the last module lands.
 
 ## Card templates in the codebase
