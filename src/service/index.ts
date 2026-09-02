@@ -50,6 +50,8 @@ export interface DashboardPersistence {
 /** What `read` returns for each scope. `all` omits categories the role cannot read. */
 export interface ReadScopes {
   all: Partial<DashboardConfiguration>;
+  /** The caller's own resolved role. Never gated — a caller may always see what it may do. */
+  role: Role;
   data: { id: string; state: unknown }[];
   cards: Card[];
   presentation: {
@@ -170,22 +172,25 @@ async function readState<Scope extends ReadScope>(
   const configuration = await readConfiguration(dependencies.persistence);
   const role = await resolveRole(dependencies, configuration, credential);
 
-  if (scope !== "all") requireRead(role, scope);
+  if (scope !== "all" && scope !== "role") requireRead(role, scope);
 
-  const scoped: ReadScopes = {
-    all: projectReadable(configuration, role),
-    data: configuration.cards.map(({ id, state }) => ({ id, state })),
-    cards: configuration.cards,
-    presentation: {
+  // Built per scope, not all at once: `all` refuses a role that may read
+  // nothing, which must not decide the answer for a scope nobody asked for.
+  const scoped: { [Scope in ReadScope]: () => ReadScopes[Scope] } = {
+    all: () => projectReadable(configuration, role),
+    role: () => role,
+    data: () => configuration.cards.map(({ id, state }) => ({ id, state })),
+    cards: () => configuration.cards,
+    presentation: () => ({
       dashboard: configuration.dashboard,
       themes: configuration.themes,
       fontScale: configuration.fontScale,
-    },
-    integrations: configuration.integrations,
-    roles: configuration.roles,
+    }),
+    integrations: () => configuration.integrations,
+    roles: () => configuration.roles,
   };
 
-  return scoped[scope];
+  return scoped[scope]();
 }
 
 /**

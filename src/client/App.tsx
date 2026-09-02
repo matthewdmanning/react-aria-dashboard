@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 
-import type { ReadableDashboard } from "../contract";
+import type { ReadableDashboard, Role } from "../contract";
 import {
   applyDashboardMutations,
+  loadCallerRole,
   loadReadableDashboard,
 } from "./dashboard-configuration-client";
 import { refreshIntegrations } from "./integrations-client";
@@ -37,6 +38,7 @@ function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
 
 export function App() {
   const [dashboard, setDashboard] = useState<ReadableDashboard>();
+  const [callerRole, setCallerRole] = useState<Role>();
   const [error, setError] = useState<string>();
   const [refreshError, setRefreshError] = useState<string>();
 
@@ -48,6 +50,7 @@ export function App() {
           reason instanceof Error ? reason.message : "Could not load dashboard",
         );
       });
+    void loadCallerRole().then(setCallerRole);
   }, []);
 
   if (error) return <p role="alert">{error}</p>;
@@ -89,6 +92,7 @@ export function App() {
         <summary>Settings</summary>
         <Settings
           dashboard={dashboard}
+          callerRole={callerRole}
           onSave={async (mutations) =>
             setDashboard(await applyDashboardMutations(mutations))
           }

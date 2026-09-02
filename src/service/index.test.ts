@@ -169,6 +169,30 @@ describe("dashboard service", () => {
     });
   });
 
+  test("tells a caller its own role however narrow that role is", async () => {
+    const persistence = createMemoryPersistence({
+      ...defaultDashboardConfiguration,
+      roles: [
+        {
+          name: "local",
+          permissions: {
+            data: "none",
+            cards: "none",
+            presentation: "none",
+            integrations: "none",
+            roles: "none",
+          },
+        },
+      ],
+    });
+    const service = createService({ persistence });
+
+    await expect(service.read("role")).resolves.toMatchObject({
+      name: "local",
+      permissions: { roles: "none" },
+    });
+  });
+
   test("refuses a scoped read the role has no access to", async () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
@@ -188,9 +212,7 @@ describe("dashboard service", () => {
     const service = createService({ persistence });
 
     await expect(
-      service.apply([
-        { type: "remove-card", cardId: "welcome" },
-      ]),
+      service.apply([{ type: "remove-card", cardId: "welcome" }]),
     ).rejects.toThrow("presentation: write");
     expect(persistence.writes).toHaveLength(0);
   });
@@ -199,9 +221,7 @@ describe("dashboard service", () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
     await expect(
-      service.apply([
-        { type: "remove-card", cardId: "welcome" },
-      ]),
+      service.apply([{ type: "remove-card", cardId: "welcome" }]),
     ).resolves.toMatchObject({ cards: [], dashboard: { cards: [] } });
   });
 
@@ -261,9 +281,7 @@ describe("dashboard service", () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
     await expect(
-      service.apply([
-        { type: "remove-theme", themeId: "calm" },
-      ]),
+      service.apply([{ type: "remove-theme", themeId: "calm" }]),
     ).rejects.toThrow("because dashboard 'home' uses it");
   });
 });

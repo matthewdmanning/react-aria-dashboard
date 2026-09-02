@@ -20,6 +20,7 @@ import { refreshIntegrations } from "./integrations";
 
 const readScopes = [
   "all",
+  "role",
   "data",
   "cards",
   "presentation",
@@ -97,6 +98,8 @@ async function readDashboardScope(
   switch (scope) {
     case "all":
       return service.read("all", credential);
+    case "role":
+      return service.read("role", credential);
     case "data":
       return service.read("data", credential);
     case "cards":
