@@ -1,6 +1,7 @@
 import {
   defaultDashboardConfiguration,
   mutationRequirements,
+  readableDashboardSchema,
   type Mutation,
   type ReadableDashboard,
 } from "../contract";
@@ -34,11 +35,17 @@ function readJSON<T>(store: KeyValueStore, key: string): T | undefined {
  *
  * ponytail: `localStorage`'s per-origin quota (a few MB) is the ceiling —
  * move to IndexedDB if a cached dashboard ever approaches it.
+ *
+ * Validated the same way the live path validates a response (D14's
+ * projection is trusted no further just because it already made it to
+ * disk) — a cache written by an older build that no longer parses is a
+ * cache miss, not a crash.
  */
 export function readCachedDashboard(
   store: KeyValueStore,
 ): ReadableDashboard | undefined {
-  return readJSON(store, CACHE_KEY);
+  const parsed = readableDashboardSchema.safeParse(readJSON(store, CACHE_KEY));
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function writeCachedDashboard(

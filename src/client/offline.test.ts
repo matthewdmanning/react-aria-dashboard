@@ -47,6 +47,23 @@ describe("offline cache", () => {
       fontScale: 1.5,
     });
   });
+
+  test("a cache that fails to parse is a cache miss, not a crash", () => {
+    const store = createMemoryStore();
+    store.setItem(
+      "dashboard-cache:home",
+      JSON.stringify({ dashboard: { id: "home" }, fontScale: "not-a-number" }),
+    );
+
+    expect(readCachedDashboard(store)).toBeUndefined();
+  });
+
+  test("unparseable JSON is also a cache miss", () => {
+    const store = createMemoryStore();
+    store.setItem("dashboard-cache:home", "{not json");
+
+    expect(readCachedDashboard(store)).toBeUndefined();
+  });
 });
 
 describe("mutation queue", () => {
