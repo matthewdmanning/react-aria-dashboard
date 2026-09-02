@@ -5,6 +5,7 @@ import {
   type Mutation,
   type ReadableDashboard,
 } from "../contract";
+import { failureFrom } from "./request";
 
 const endpoint = "/api/dashboard-configuration";
 
@@ -14,7 +15,7 @@ const endpoint = "/api/dashboard-configuration";
  */
 export async function loadReadableDashboard(): Promise<ReadableDashboard> {
   const response = await fetch(`${endpoint}?scope=all`);
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw await failureFrom(response);
   return readableDashboardSchema.parse(await response.json());
 }
 
@@ -26,6 +27,6 @@ export async function applyDashboardMutations(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(mutations),
   });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw await failureFrom(response);
   return parseDashboardConfiguration(await response.json());
 }

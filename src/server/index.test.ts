@@ -75,7 +75,43 @@ describe("dashboard service HTTP transport", () => {
     );
 
     expect(response.status).toBe(403);
-    await expect(response.text()).resolves.toContain("roles: read");
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
+    });
+  });
+
+  test("maps each service failure onto its own status", async () => {
+    const service = createTestService();
+
+    const missing = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([
+          { type: "edit-theme", theme: { id: "absent", settings: {} } },
+        ]),
+      }),
+      service,
+    );
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({ code: "unknown-id" });
+
+    const inUse = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([{ type: "remove-theme", themeId: "calm" }]),
+      }),
+      service,
+    );
+    expect(inUse.status).toBe(409);
+    await expect(inUse.json()).resolves.toMatchObject({ code: "in-use" });
+
+    const unauthenticated = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        headers: { authorization: "Basic nope" },
+      }),
+      service,
+    );
+    expect(unauthenticated.status).toBe(401);
   });
 });
 

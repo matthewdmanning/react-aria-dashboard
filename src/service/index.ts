@@ -18,6 +18,30 @@ import {
   type Theme,
 } from "../contract";
 
+/**
+ * Why a service call failed, named in the service's own terms. Adapters map a
+ * code to their vocabulary — a status, a tool result, a message — so no caller
+ * has to match on the message text.
+ */
+export type ServiceFailureCode =
+  | "unknown-credential"
+  | "authentication-unavailable"
+  | "permission-denied"
+  | "unknown-role"
+  | "unknown-id"
+  | "duplicate-id"
+  | "in-use";
+
+export class ServiceFailure extends Error {
+  constructor(
+    readonly code: ServiceFailureCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ServiceFailure";
+  }
+}
+
 export interface DashboardPersistence {
   read(): Promise<unknown>;
   write(configuration: DashboardConfiguration): Promise<void>;
@@ -119,15 +143,22 @@ async function resolveRole(
 
   if (credential !== undefined) {
     if (!dependencies.authStore) {
-      throw new Error("Authentication is not configured");
+      throw new ServiceFailure(
+        "authentication-unavailable",
+        "Authentication is not configured",
+      );
     }
     const account = await dependencies.authStore.resolve(credential);
-    if (!account) throw new Error("Unknown credential");
+    if (!account) {
+      throw new ServiceFailure("unknown-credential", "Unknown credential");
+    }
     roleName = account.role;
   }
 
   const role = configuration.roles.find(({ name }) => name === roleName);
-  if (!role) throw new Error(`Unknown role: ${roleName}`);
+  if (!role) {
+    throw new ServiceFailure("unknown-role", `Unknown role: ${roleName}`);
+  }
   return role;
 }
 
@@ -184,7 +215,7 @@ function projectReadable(
   if (role.permissions.roles !== "none") readable.roles = configuration.roles;
 
   if (Object.keys(readable).length === 0) {
-    throw new Error("Permission denied: read");
+    throw new ServiceFailure("permission-denied", "Permission denied: read");
   }
   return readable;
 }
@@ -221,7 +252,10 @@ async function applyMutations(
 
 function requireRead(role: Role, category: PermissionCategory): void {
   if (role.permissions[category] === "none") {
-    throw new Error(`Permission denied: ${category}: read`);
+    throw new ServiceFailure(
+      "permission-denied",
+      `Permission denied: ${category}: read`,
+    );
   }
 }
 
@@ -238,7 +272,10 @@ function requireLevel(
   level: PermissionLevel,
 ): void {
   if (permissionRank[role.permissions[category]] < permissionRank[level]) {
-    throw new Error(`Permission denied: ${category}: ${level}`);
+    throw new ServiceFailure(
+      "permission-denied",
+      `Permission denied: ${category}: ${level}`,
+    );
   }
 }
 
@@ -275,11 +312,15 @@ function applyMutation(
     case "insert-card": {
       const { dashboard } = configuration;
       if (dashboard.id !== mutation.dashboardId) {
-        throw new Error(`Unknown dashboard: ${mutation.dashboardId}`);
+        throw new ServiceFailure(
+          "unknown-id",
+          `Unknown dashboard: ${mutation.dashboardId}`,
+        );
       }
       requireById(configuration.cards, mutation.cardId, "card");
       if (dashboard.cards.includes(mutation.cardId)) {
-        throw new Error(
+        throw new ServiceFailure(
+          "duplicate-id",
           `Dashboard '${mutation.dashboardId}' already contains card '${mutation.cardId}'`,
         );
       }
@@ -292,7 +333,10 @@ function applyMutation(
     }
     case "edit-dashboard":
       if (configuration.dashboard.id !== mutation.dashboard.id) {
-        throw new Error(`Unknown dashboard: ${mutation.dashboard.id}`);
+        throw new ServiceFailure(
+          "unknown-id",
+          `Unknown dashboard: ${mutation.dashboard.id}`,
+        );
       }
       configuration.dashboard = mutation.dashboard;
       return;
@@ -305,7 +349,8 @@ function applyMutation(
     case "remove-theme": {
       const { dashboard } = configuration;
       if (dashboard.theme === mutation.themeId) {
-        throw new Error(
+        throw new ServiceFailure(
+          "in-use",
           `Cannot remove theme '${mutation.themeId}' because dashboard '${dashboard.id}' uses it`,
         );
       }
@@ -336,7 +381,8 @@ function applyMutation(
         ),
       );
       if (card) {
-        throw new Error(
+        throw new ServiceFailure(
+          "in-use",
           `Cannot remove integration '${mutation.integrationId}' because card '${card.id}' uses it`,
         );
       }
@@ -360,7 +406,7 @@ function requireById<T extends { id: string }>(
   label: string,
 ): T {
   const value = values.find((candidate) => candidate.id === id);
-  if (!value) throw new Error(`Unknown ${label}: ${id}`);
+  if (!value) throw new ServiceFailure("unknown-id", `Unknown ${label}: ${id}`);
   return value;
 }
 
@@ -370,7 +416,10 @@ function addById<T extends { id: string }>(
   label: string,
 ): void {
   if (values.some(({ id }) => id === addition.id)) {
-    throw new Error(`Duplicate ${label}: ${addition.id}`);
+    throw new ServiceFailure(
+      "duplicate-id",
+      `Duplicate ${label}: ${addition.id}`,
+    );
   }
   values.push(addition);
 }
@@ -381,7 +430,12 @@ function replaceById<T extends { id: string }>(
   label: string,
 ): void {
   const index = values.findIndex(({ id }) => id === replacement.id);
-  if (index === -1) throw new Error(`Unknown ${label}: ${replacement.id}`);
+  if (index === -1) {
+    throw new ServiceFailure(
+      "unknown-id",
+      `Unknown ${label}: ${replacement.id}`,
+    );
+  }
   values[index] = replacement;
 }
 
@@ -392,7 +446,7 @@ function removeById<T extends { id: string }>(
 ): T[] {
   const remaining = values.filter((value) => value.id !== id);
   if (remaining.length === values.length) {
-    throw new Error(`Unknown ${label}: ${id}`);
+    throw new ServiceFailure("unknown-id", `Unknown ${label}: ${id}`);
   }
   return remaining;
 }
