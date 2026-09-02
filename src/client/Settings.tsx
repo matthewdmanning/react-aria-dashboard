@@ -9,18 +9,12 @@ import {
 export function Settings({
   dashboard,
   callerRole,
-  connectableTypes,
   onSave,
-  onAuthorize,
 }: {
   dashboard: ReadableDashboard;
   /** The caller's own role, so a user can see what this session may do. */
   callerRole?: Role;
-  /** The services this build can connect to (#66) — Settings names none of its own. */
-  connectableTypes: string[];
   onSave: (mutations: readonly Mutation[]) => Promise<void>;
-  /** Hands a connection's secret to the server. Not a mutation — see `contract`'s ban on a credential-shaped settings key. */
-  onAuthorize: (integrationId: string, credential: string) => Promise<void>;
 }) {
   const initial: DashboardSettings = {
     dashboard: dashboard.dashboard,
@@ -29,11 +23,7 @@ export function Settings({
     fontScale: dashboard.fontScale,
   };
   const [settings, setSettings] = useState<DashboardSettings>(initial);
-  const [connection, setConnection] = useState({
-    id: "",
-    type: "",
-    credential: "",
-  });
+  const [connection, setConnection] = useState({ id: "", type: "" });
   const [error, setError] = useState<string>();
 
   function submit(event: FormEvent) {
@@ -47,29 +37,6 @@ export function Settings({
         reason instanceof Error ? reason.message : "Could not save settings",
       );
     });
-  }
-
-  function connect() {
-    setError(undefined);
-    void (connection.credential === ""
-      ? Promise.resolve()
-      : onAuthorize(connection.id, connection.credential)
-    )
-      .then(() => {
-        setSettings({
-          ...settings,
-          integrations: [
-            ...(settings.integrations ?? []),
-            { id: connection.id, type: connection.type, settings: {} },
-          ],
-        });
-        setConnection({ id: "", type: "", credential: "" });
-      })
-      .catch((reason: unknown) => {
-        setError(
-          reason instanceof Error ? reason.message : "Could not connect",
-        );
-      });
   }
 
   function updateTheme(id: string, update: (theme: Theme) => Theme) {
@@ -213,7 +180,7 @@ export function Settings({
           </label>
           <label>
             Service
-            <select
+            <input
               value={connection.type}
               onChange={(event) =>
                 setConnection({
@@ -221,32 +188,21 @@ export function Settings({
                   type: event.currentTarget.value,
                 })
               }
-            >
-              <option value="">Select a service</option>
-              {connectableTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Credential
-            <input
-              type="password"
-              value={connection.credential}
-              onChange={(event) =>
-                setConnection({
-                  ...connection,
-                  credential: event.currentTarget.value,
-                })
-              }
             />
           </label>
           <button
             type="button"
             disabled={connection.id === "" || connection.type === ""}
-            onClick={connect}
+            onClick={() => {
+              setSettings({
+                ...settings,
+                integrations: [
+                  ...(settings.integrations ?? []),
+                  { id: connection.id, type: connection.type, settings: {} },
+                ],
+              });
+              setConnection({ id: "", type: "" });
+            }}
           >
             Connect
           </button>

@@ -6,11 +6,7 @@ import {
   loadCallerRole,
   loadReadableDashboard,
 } from "./dashboard-configuration-client";
-import {
-  authorizeIntegration,
-  loadConnectableIntegrationTypes,
-  refreshIntegrations,
-} from "./integrations-client";
+import { refreshIntegrations } from "./integrations-client";
 import { CardView } from "./cards/CardView";
 import {
   enqueue,
@@ -55,7 +51,6 @@ export function App() {
   const [error, setError] = useState<string>();
   const [refreshError, setRefreshError] = useState<string>();
   const [offline, setOffline] = useState(false);
-  const [connectableTypes, setConnectableTypes] = useState<string[]>([]);
   const [pendingCount, setPendingCount] = useState(
     pendingMutationCount(localStorage),
   );
@@ -94,9 +89,6 @@ export function App() {
         setOffline(true);
       });
     void loadCallerRole().then(setCallerRole);
-    void loadConnectableIntegrationTypes()
-      .then(setConnectableTypes)
-      .catch(() => undefined);
 
     const handleOnline = () => void sync().then(() => setOffline(false));
     window.addEventListener("online", handleOnline);
@@ -170,9 +162,7 @@ export function App() {
         <Settings
           dashboard={dashboard}
           callerRole={callerRole}
-          connectableTypes={connectableTypes}
           onSave={saveMutations}
-          onAuthorize={authorizeIntegration}
         />
       </details>
     </>
