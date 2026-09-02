@@ -17,20 +17,19 @@ function presentationMutations(
   settings: DashboardSettings,
 ): Mutation[] {
   const mutations: Mutation[] = [];
-  const permission = "presentation" as const;
 
   if (
     settings.dashboard &&
     initial.dashboard &&
     !sameValue(initial.dashboard, settings.dashboard)
   ) {
-    mutations.push({ type: "edit-dashboard", permission, dashboard: settings.dashboard });
+    mutations.push({ type: "edit-dashboard", dashboard: settings.dashboard });
   }
   if (
     settings.fontScale !== undefined &&
     settings.fontScale !== initial.fontScale
   ) {
-    mutations.push({ type: "set-font-scale", permission, fontScale: settings.fontScale });
+    mutations.push({ type: "set-font-scale", fontScale: settings.fontScale });
   }
 
   if (settings.themes && initial.themes) {
@@ -40,14 +39,14 @@ function presentationMutations(
     for (const theme of settings.themes) {
       const previous = before.get(theme.id);
       if (!previous) {
-        mutations.push({ type: "add-theme", permission, theme });
+        mutations.push({ type: "add-theme", theme });
       } else if (!sameValue(previous, theme)) {
-        mutations.push({ type: "edit-theme", permission, theme });
+        mutations.push({ type: "edit-theme", theme });
       }
     }
     for (const { id } of initial.themes) {
       if (!after.has(id)) {
-        mutations.push({ type: "remove-theme", permission, themeId: id });
+        mutations.push({ type: "remove-theme", themeId: id });
       }
     }
   }
@@ -62,7 +61,6 @@ function integrationMutations(
   if (!settings.integrations || !initial.integrations) return [];
 
   const mutations: Mutation[] = [];
-  const permission = "integrations" as const;
   const before = new Map(
     initial.integrations.map((integration) => [integration.id, integration]),
   );
@@ -70,12 +68,12 @@ function integrationMutations(
 
   for (const integration of settings.integrations) {
     if (!before.has(integration.id)) {
-      mutations.push({ type: "add-integration", permission, integration });
+      mutations.push({ type: "add-integration", integration });
     }
   }
   for (const { id } of initial.integrations) {
     if (!after.has(id)) {
-      mutations.push({ type: "remove-integration", permission, integrationId: id });
+      mutations.push({ type: "remove-integration", integrationId: id });
     }
   }
 
@@ -109,7 +107,9 @@ export function Settings({
 
     setError(undefined);
     void onSave(mutations).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "Could not save settings");
+      setError(
+        reason instanceof Error ? reason.message : "Could not save settings",
+      );
     });
   }
 
@@ -183,7 +183,9 @@ export function Settings({
                 onClick={() =>
                   setSettings({
                     ...settings,
-                    themes: settings.themes?.filter(({ id }) => id !== theme.id),
+                    themes: settings.themes?.filter(
+                      ({ id }) => id !== theme.id,
+                    ),
                   })
                 }
               >
@@ -255,7 +257,10 @@ export function Settings({
             <input
               value={connection.type}
               onChange={(event) =>
-                setConnection({ ...connection, type: event.currentTarget.value })
+                setConnection({
+                  ...connection,
+                  type: event.currentTarget.value,
+                })
               }
             />
           </label>

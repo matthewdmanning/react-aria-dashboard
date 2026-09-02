@@ -50,13 +50,11 @@ describe("dashboard service", () => {
     const mutations: Mutation[] = [
       {
         type: "patch-card-state",
-        permission: "data",
         cardId: "welcome",
         patch: { message: "Updated" },
       },
       {
         type: "set-font-scale",
-        permission: "presentation",
         fontScale: 1.25,
       },
     ];
@@ -84,13 +82,11 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "patch-card-state",
-          permission: "data",
           cardId: "welcome",
           patch: { message: "Updated" },
         },
         {
           type: "set-font-scale",
-          permission: "presentation",
           fontScale: 1.25,
         },
       ]),
@@ -114,7 +110,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "patch-card-state",
-          permission: "data",
           cardId: "welcome",
           patch: { message: "Updated" },
         },
@@ -125,7 +120,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "add-theme",
-          permission: "presentation",
           theme: { id: "dark", settings: {} },
         },
       ]),
@@ -195,7 +189,7 @@ describe("dashboard service", () => {
 
     await expect(
       service.apply([
-        { type: "remove-card", permission: "cards", cardId: "welcome" },
+        { type: "remove-card", cardId: "welcome" },
       ]),
     ).rejects.toThrow("presentation: write");
     expect(persistence.writes).toHaveLength(0);
@@ -206,7 +200,7 @@ describe("dashboard service", () => {
 
     await expect(
       service.apply([
-        { type: "remove-card", permission: "cards", cardId: "welcome" },
+        { type: "remove-card", cardId: "welcome" },
       ]),
     ).resolves.toMatchObject({ cards: [], dashboard: { cards: [] } });
   });
@@ -218,7 +212,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "add-theme",
-          permission: "presentation",
           theme: { id: "dark", settings: { density: "compact" } },
         },
       ]),
@@ -228,7 +221,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "add-theme",
-          permission: "presentation",
           theme: { id: "calm", settings: {} },
         },
       ]),
@@ -242,7 +234,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "add-integration",
-          permission: "integrations",
           integration: {
             id: "calendar",
             type: "google-calendar",
@@ -260,7 +251,6 @@ describe("dashboard service", () => {
       service.apply([
         {
           type: "edit-theme",
-          permission: "presentation",
           theme: { id: "missing", settings: {} },
         },
       ]),
@@ -272,7 +262,7 @@ describe("dashboard service", () => {
 
     await expect(
       service.apply([
-        { type: "remove-theme", permission: "presentation", themeId: "calm" },
+        { type: "remove-theme", themeId: "calm" },
       ]),
     ).rejects.toThrow("because dashboard 'home' uses it");
   });

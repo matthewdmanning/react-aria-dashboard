@@ -110,17 +110,6 @@ describe("dashboard contract", () => {
       }),
     ).toThrow();
   });
-
-  test("tags mutations with the permission category they require", () => {
-    expect(
-      mutationSchema.parse({
-        type: "patch-card-state",
-        permission: "data",
-        cardId: "first",
-        patch: { message: "Updated" },
-      }),
-    ).toMatchObject({ type: "patch-card-state", permission: "data" });
-  });
 });
 
 describe("compileFormatterSpec", () => {
