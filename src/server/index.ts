@@ -1,14 +1,15 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer as createViteServer } from "vite";
 
-import { defaultDashboardConfiguration } from "../dashboard";
+import { createFileAccountStore } from "../auth";
+import type { Mutation } from "../contract";
 import {
-  readDashboardConfiguration,
-  replaceDashboardConfiguration,
-} from "./dashboard-store";
+  createFilePersistence,
+  createService,
+  type DashboardService,
+} from "../service";
 import {
   pullGoogleCalendar,
   readGoogleCalendarSource,
@@ -16,74 +17,92 @@ import {
   type GoogleCalendarTokenProvider,
 } from "./integrations/google-calendar";
 
+const readScopes = [
+  "all",
+  "data",
+  "cards",
+  "presentation",
+  "integrations",
+  "roles",
+] as const;
+
 export async function handleDashboardConfigurationRequest(
   request: Request,
-  dashboardPath: string,
-  dataPath?: string,
+  service: DashboardService,
 ): Promise<Response> {
-  if (request.method === "GET") {
-    try {
-      return Response.json(await readDashboardConfiguration(dashboardPath));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      await replaceDashboardConfiguration(
-        dashboardPath,
-        defaultDashboardConfiguration,
-      );
-      if (dataPath) {
-        await mkdir(dataPath, { recursive: true });
-        await writeFile(
-          join(dataPath, "welcome.json"),
-          JSON.stringify({ text: "Dashboard architecture is ready." }),
-        );
+  try {
+    if (request.method === "GET") {
+      const scope = new URL(request.url).searchParams.get("scope") ?? "all";
+      if (!(readScopes as readonly string[]).includes(scope)) {
+        return new Response("Unknown dashboard scope", { status: 400 });
       }
-      return Response.json(defaultDashboardConfiguration);
+      return Response.json(
+        await readDashboardScope(service, scope as (typeof readScopes)[number], request),
+      );
     }
-  }
 
-  if (request.method === "PUT") {
-    await replaceDashboardConfiguration(dashboardPath, await request.json());
-    return new Response(null, { status: 204 });
-  }
+    if (request.method === "POST") {
+      return Response.json(
+        await service.apply(
+          (await request.json()) as readonly Mutation[],
+          credentialFromRequest(request),
+        ),
+      );
+    }
 
-  return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", { status: 405 });
+  } catch (error) {
+    return new Response(error instanceof Error ? error.message : "Invalid request", {
+      status: isAuthorizationError(error) ? 403 : 400,
+    });
+  }
 }
 
-export async function handleSourcesRequest(
+async function readDashboardScope(
+  service: DashboardService,
+  scope: (typeof readScopes)[number],
   request: Request,
-  dashboardPath: string,
-  dataPath: string,
-): Promise<Response> {
-  if (request.method !== "GET") {
-    return new Response("Method not allowed", { status: 405 });
+) {
+  const credential = credentialFromRequest(request);
+  switch (scope) {
+    case "all":
+      return service.read("all", credential);
+    case "data":
+      return service.read("data", credential);
+    case "cards":
+      return service.read("cards", credential);
+    case "presentation":
+      return service.read("presentation", credential);
+    case "integrations":
+      return service.read("integrations", credential);
+    case "roles":
+      return service.read("roles", credential);
   }
-  const configuration = await readDashboardConfiguration(dashboardPath).catch(
-    (error: NodeJS.ErrnoException) => {
-      if (error.code !== "ENOENT") throw error;
-      return defaultDashboardConfiguration;
-    },
+}
+
+function credentialFromRequest(request: Request): string | undefined {
+  const authorization = request.headers.get("authorization");
+  if (authorization === null) return undefined;
+  const match = /^Bearer\s+(.+)$/i.exec(authorization);
+  if (!match) throw new Error("Invalid authorization header");
+  return match[1];
+}
+
+function isAuthorizationError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (/^(Unknown credential|Authentication is not configured|Permission denied)/.test(
+      error.message,
+    ) ||
+      error.message === "Invalid authorization header")
   );
-  const sourceIds = new Set(configuration.wiring.map(({ source }) => source));
-  const sources: Record<string, unknown> = {};
-  await Promise.all(
-    [...sourceIds].map(async (id) => {
-      try {
-        sources[id] = JSON.parse(
-          await readFile(join(dataPath, `${id}.json`), "utf8"),
-        );
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
-    }),
-  );
-  return Response.json(sources);
 }
 
 export async function handleGoogleCalendarRequest(
   request: Request,
-  configurationPath: string,
   dataPath: string,
   dependencies: {
+    service: DashboardService;
     tokenProvider: GoogleCalendarTokenProvider;
     fetch?: FetchCalendar;
   },
@@ -98,7 +117,10 @@ export async function handleGoogleCalendarRequest(
     return Response.json(
       await pullGoogleCalendar({
         ...dependencies,
-        configurationPath,
+        integrations: await dependencies.service.read(
+          "integrations",
+          credentialFromRequest(request),
+        ),
         dataPath,
       }),
     );
@@ -107,58 +129,42 @@ export async function handleGoogleCalendarRequest(
 }
 
 async function startServer() {
+  const workspace = resolve(process.env.DASHBOARD_WORKSPACE ?? ".");
   const dashboardPath =
-    process.env.DASHBOARD_DATA_PATH ?? resolve(".dashboard/dashboard.json");
+    process.env.DASHBOARD_DATA_PATH ??
+    join(workspace, ".dashboard", "dashboard.json");
+  const accountPath =
+    process.env.DASHBOARD_ACCOUNT_PATH ??
+    join(workspace, ".dashboard", "accounts.json");
   const calendarDataPath =
     process.env.DASHBOARD_CALENDAR_DATA_PATH ??
-    resolve(".dashboard/google-calendar.json");
-  const dataPath = resolve(process.env.DASHBOARD_WORKSPACE ?? ".", "data");
+    join(workspace, ".dashboard", "google-calendar.json");
+  const service = createService({
+    persistence: createFilePersistence(dashboardPath),
+    accountStore: createFileAccountStore(accountPath),
+  });
   const tokenProvider: GoogleCalendarTokenProvider = async () => {
     throw new Error("Google Calendar credentials are not configured");
   };
   const vite = await createViteServer({ server: { middlewareMode: true } });
   const server = createServer(async (request, response) => {
-    if (request.url === "/api/dashboard-configuration") {
+    if (request.url?.startsWith("/api/dashboard-configuration")) {
       try {
         const chunks: Buffer[] = [];
         for await (const chunk of request) chunks.push(Buffer.from(chunk));
         const result = await handleDashboardConfigurationRequest(
           new Request(`http://dashboard${request.url}`, {
             method: request.method,
-            body: chunks.length
-              ? Buffer.concat(chunks).toString("utf8")
-              : undefined,
+            headers: authorizationHeaders(request),
+            body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
           }),
-          dashboardPath,
-          dataPath,
+          service,
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));
         response.end(Buffer.from(await result.arrayBuffer()));
       } catch (error) {
         response.writeHead(400, { "content-type": "text/plain" });
-        response.end(
-          error instanceof Error ? error.message : "Invalid request",
-        );
-      }
-      return;
-    }
-
-    if (request.url === "/api/sources") {
-      try {
-        const result = await handleSourcesRequest(
-          new Request(`http://dashboard${request.url}`, {
-            method: request.method,
-          }),
-          dashboardPath,
-          dataPath,
-        );
-        response.writeHead(result.status, Object.fromEntries(result.headers));
-        response.end(Buffer.from(await result.arrayBuffer()));
-      } catch (error) {
-        response.writeHead(400, { "content-type": "text/plain" });
-        response.end(
-          error instanceof Error ? error.message : "Invalid request",
-        );
+        response.end(error instanceof Error ? error.message : "Invalid request");
       }
       return;
     }
@@ -170,13 +176,11 @@ async function startServer() {
         const result = await handleGoogleCalendarRequest(
           new Request(`http://dashboard${request.url}`, {
             method: request.method,
-            body: chunks.length
-              ? Buffer.concat(chunks).toString("utf8")
-              : undefined,
+            headers: authorizationHeaders(request),
+            body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
           }),
-          dashboardPath,
           calendarDataPath,
-          { tokenProvider },
+          { tokenProvider, service },
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));
         response.end(Buffer.from(await result.arrayBuffer()));
@@ -193,6 +197,13 @@ async function startServer() {
   });
 
   server.listen(Number(process.env.PORT ?? 5173), "127.0.0.1");
+}
+
+function authorizationHeaders(request: import("node:http").IncomingMessage) {
+  const authorization = request.headers.authorization;
+  return typeof authorization !== "string"
+    ? undefined
+    : { authorization };
 }
 
 if (

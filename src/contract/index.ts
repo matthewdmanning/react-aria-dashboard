@@ -43,13 +43,25 @@ export const roleSchema = z
 
 export type Role = z.infer<typeof roleSchema>;
 
+const credentialKey =
+  /credential|password|secret|token|api.?key|access.?key/i;
+
 export const integrationSchema = z
   .object({
     id: z.string().min(1),
     type: z.string().min(1),
     settings: z.record(z.string(), z.unknown()),
   })
-  .strict();
+  .strict()
+  .superRefine(({ settings }, context) => {
+    if (Object.keys(settings).some((key) => credentialKey.test(key))) {
+      context.addIssue({
+        code: "custom",
+        path: ["settings"],
+        message: "Integration credentials are not allowed",
+      });
+    }
+  });
 
 export type Integration = z.infer<typeof integrationSchema>;
 

@@ -1,80 +1,72 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
+import type { DashboardConfiguration, Role } from "../contract";
 import {
-  compileFormatterSpec,
-  renderDashboard,
-  type DashboardConfiguration,
-} from "../dashboard";
-import {
+  applyDashboardMutations,
   loadDashboardConfiguration,
-  loadSources,
-  saveDashboardConfiguration,
+  loadDashboardRoles,
 } from "./dashboard-configuration-client";
 import {
   loadGoogleCalendarSource,
   refreshGoogleCalendar,
 } from "./google-calendar-client";
-import { formatIdentity } from "./formatters/identity";
-import { formatMessage } from "./formatters/message";
 import { includedCardTemplates } from "./cards";
-import { saveDashboardSettings, Settings } from "./Settings";
-import { formatGoogleCalendar } from "./formatters/google-calendar";
+import { Settings } from "./Settings";
+
+function renderDashboard(configuration: DashboardConfiguration) {
+  const cards = new Map(configuration.cards.map((card) => [card.id, card]));
+
+  return (
+    <main
+      data-theme={configuration.dashboard.theme}
+      style={{ fontSize: `${configuration.fontScale}rem` }}
+    >
+      {configuration.dashboard.cards.map((cardId) => {
+        const card = cards.get(cardId)!;
+        const Component = includedCardTemplates[card.template].Component;
+        return (
+          <section key={card.id}>
+            <h2>{card.title}</h2>
+            <Component data={card.state as never} />
+          </section>
+        );
+      })}
+    </main>
+  );
+}
 
 export function App() {
-  const [configuration, setConfiguration] = useState<DashboardConfiguration>();
-  const [sources, setSources] = useState<Record<string, unknown>>();
-  const [calendarSource, setCalendarSource] = useState<unknown>();
+  const [configuration, setConfiguration] =
+    useState<DashboardConfiguration>();
+  const [roles, setRoles] = useState<Role[]>();
   const [calendarError, setCalendarError] = useState<string>();
 
   useEffect(() => {
     void loadDashboardConfiguration().then(setConfiguration);
-    void loadSources().then(setSources);
-    void loadGoogleCalendarSource()
-      .then(setCalendarSource)
-      .catch((error: unknown) => {
-        setCalendarError(
-          error instanceof Error ? error.message : "Calendar unavailable",
-        );
-      });
+    void loadDashboardRoles().then(setRoles);
+    void loadGoogleCalendarSource().catch((error: unknown) => {
+      setCalendarError(
+        error instanceof Error ? error.message : "Calendar unavailable",
+      );
+    });
   }, []);
 
-  const formatters = useMemo(
-    () => ({
-      identity: formatIdentity,
-      message: formatMessage,
-      "google-calendar": formatGoogleCalendar,
-      ...Object.fromEntries(
-        Object.entries(configuration?.formatterSpecs ?? {}).map(
-          ([id, spec]) => [id, compileFormatterSpec(spec)],
-        ),
-      ),
-    }),
-    [configuration?.formatterSpecs],
-  );
-
-  if (!configuration || !sources) return <p>Loading dashboard…</p>;
+  if (!configuration) return <p>Loading dashboard…</p>;
 
   return (
     <>
-      {renderDashboard(configuration, {
-        cardTemplates: includedCardTemplates,
-        sources: { ...sources, "google-calendar": calendarSource },
-        formatters,
-      })}
+      {renderDashboard(configuration)}
       <section aria-label="Google Calendar controls">
         <button
           type="button"
           onClick={() =>
-            void refreshGoogleCalendar()
-              .then(setCalendarSource)
-              .then(() => setCalendarError(undefined))
-              .catch((error: unknown) =>
-                setCalendarError(
-                  error instanceof Error
-                    ? error.message
-                    : "Calendar refresh failed",
-                ),
-              )
+            void refreshGoogleCalendar().catch((error: unknown) =>
+              setCalendarError(
+                error instanceof Error
+                  ? error.message
+                  : "Calendar refresh failed",
+              ),
+            )
           }
         >
           Refresh Google Calendar
@@ -85,15 +77,9 @@ export function App() {
         <summary>Settings</summary>
         <Settings
           configuration={configuration}
-          themes={["calm", "contrast"]}
-          onSave={async (settings) =>
-            setConfiguration(
-              await saveDashboardSettings(
-                configuration,
-                settings,
-                saveDashboardConfiguration,
-              ),
-            )
+          roles={roles}
+          onSave={async (mutations) =>
+            setConfiguration(await applyDashboardMutations(mutations))
           }
         />
       </details>
