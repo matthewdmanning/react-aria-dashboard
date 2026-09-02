@@ -45,17 +45,6 @@ async function writeAtomically(path: string, content: string) {
   }
 }
 
-export async function readGoogleCalendarSource(
-  dataPath: string,
-): Promise<unknown> {
-  try {
-    return JSON.parse(await readFile(dataPath, "utf8"));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-
 export async function pullGoogleCalendar({
   integrations,
   dataPath,

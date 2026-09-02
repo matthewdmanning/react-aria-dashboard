@@ -1,28 +1,29 @@
 import { useEffect, useState } from "react";
 
-import type { DashboardConfiguration, Role } from "../contract";
+import type { ReadableDashboard } from "../contract";
 import {
   applyDashboardMutations,
-  loadDashboardConfiguration,
-  loadDashboardRoles,
+  loadReadableDashboard,
 } from "./dashboard-configuration-client";
-import {
-  loadGoogleCalendarSource,
-  refreshGoogleCalendar,
-} from "./google-calendar-client";
+import { refreshIntegrations } from "./integrations-client";
 import { includedCardTemplates } from "./cards";
 import { Settings } from "./Settings";
 
-function renderDashboard(configuration: DashboardConfiguration) {
-  const cards = new Map(configuration.cards.map((card) => [card.id, card]));
+function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
+  if (!dashboard || !cards) {
+    return <p>You do not have permission to view this dashboard.</p>;
+  }
+
+  const byId = new Map(cards.map((card) => [card.id, card]));
 
   return (
     <main
-      data-theme={configuration.dashboard.theme}
-      style={{ fontSize: `${configuration.fontScale}rem` }}
+      data-theme={dashboard.theme}
+      style={{ fontSize: `${fontScale ?? 1}rem` }}
     >
-      {configuration.dashboard.cards.map((cardId) => {
-        const card = cards.get(cardId)!;
+      {dashboard.cards.map((cardId) => {
+        const card = byId.get(cardId);
+        if (!card) return null;
         const Component = includedCardTemplates[card.template].Component;
         return (
           <section key={card.id}>
@@ -36,50 +37,61 @@ function renderDashboard(configuration: DashboardConfiguration) {
 }
 
 export function App() {
-  const [configuration, setConfiguration] =
-    useState<DashboardConfiguration>();
-  const [roles, setRoles] = useState<Role[]>();
-  const [calendarError, setCalendarError] = useState<string>();
+  const [dashboard, setDashboard] = useState<ReadableDashboard>();
+  const [error, setError] = useState<string>();
+  const [refreshError, setRefreshError] = useState<string>();
 
   useEffect(() => {
-    void loadDashboardConfiguration().then(setConfiguration);
-    void loadDashboardRoles().then(setRoles);
-    void loadGoogleCalendarSource().catch((error: unknown) => {
-      setCalendarError(
-        error instanceof Error ? error.message : "Calendar unavailable",
-      );
-    });
+    void loadReadableDashboard()
+      .then(setDashboard)
+      .catch((reason: unknown) => {
+        setError(
+          reason instanceof Error ? reason.message : "Could not load dashboard",
+        );
+      });
   }, []);
 
-  if (!configuration) return <p>Loading dashboard…</p>;
+  if (error) return <p role="alert">{error}</p>;
+  if (!dashboard) return <p>Loading dashboard…</p>;
 
   return (
     <>
-      {renderDashboard(configuration)}
-      <section aria-label="Google Calendar controls">
+      {renderDashboard(dashboard)}
+      <section aria-label="Integrations">
         <button
           type="button"
-          onClick={() =>
-            void refreshGoogleCalendar().catch((error: unknown) =>
-              setCalendarError(
-                error instanceof Error
-                  ? error.message
-                  : "Calendar refresh failed",
-              ),
-            )
-          }
+          onClick={() => {
+            setRefreshError(undefined);
+            void refreshIntegrations()
+              .then((refreshes) => {
+                const failed = refreshes.filter(
+                  ({ status }) => status === "failed",
+                );
+                if (failed.length > 0) {
+                  setRefreshError(
+                    failed
+                      .map(({ id, message }) => `${id}: ${message ?? "failed"}`)
+                      .join(", "),
+                  );
+                }
+              })
+              .catch((reason: unknown) =>
+                setRefreshError(
+                  reason instanceof Error ? reason.message : "Refresh failed",
+                ),
+              );
+          }}
         >
-          Refresh Google Calendar
+          Refresh
         </button>
-        {calendarError ? <p role="alert">{calendarError}</p> : null}
+        {refreshError ? <p role="alert">{refreshError}</p> : null}
       </section>
       <details>
         <summary>Settings</summary>
         <Settings
-          configuration={configuration}
-          roles={roles}
+          dashboard={dashboard}
           onSave={async (mutations) =>
-            setConfiguration(await applyDashboardMutations(mutations))
+            setDashboard(await applyDashboardMutations(mutations))
           }
         />
       </details>

@@ -3,19 +3,18 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createServer as createViteServer } from "vite";
 
-import { createFileAccountStore } from "../auth";
+import { createFileAuthStore } from "../auth";
 import type { Mutation } from "../contract";
 import {
   createFilePersistence,
   createService,
   type DashboardService,
 } from "../service";
-import {
-  pullGoogleCalendar,
-  readGoogleCalendarSource,
-  type FetchCalendar,
-  type GoogleCalendarTokenProvider,
+import type {
+  FetchCalendar,
+  GoogleCalendarTokenProvider,
 } from "./integrations/google-calendar";
+import { refreshIntegrations } from "./integrations";
 
 const readScopes = [
   "all",
@@ -98,34 +97,25 @@ function isAuthorizationError(error: unknown): boolean {
   );
 }
 
-export async function handleGoogleCalendarRequest(
+export async function handleIntegrationRefreshRequest(
   request: Request,
-  dataPath: string,
+  dataDirectory: string,
   dependencies: {
     service: DashboardService;
     tokenProvider: GoogleCalendarTokenProvider;
     fetch?: FetchCalendar;
   },
 ): Promise<Response> {
-  if (request.method === "GET") {
-    const source = await readGoogleCalendarSource(dataPath);
-    return source === undefined
-      ? new Response(null, { status: 404 })
-      : Response.json(source);
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
   }
-  if (request.method === "POST") {
-    return Response.json(
-      await pullGoogleCalendar({
-        ...dependencies,
-        integrations: await dependencies.service.read(
-          "integrations",
-          credentialFromRequest(request),
-        ),
-        dataPath,
-      }),
-    );
-  }
-  return new Response("Method not allowed", { status: 405 });
+  const integrations = await dependencies.service.read(
+    "integrations",
+    credentialFromRequest(request),
+  );
+  return Response.json(
+    await refreshIntegrations(integrations, { ...dependencies, dataDirectory }),
+  );
 }
 
 async function startServer() {
@@ -133,15 +123,15 @@ async function startServer() {
   const dashboardPath =
     process.env.DASHBOARD_DATA_PATH ??
     join(workspace, ".dashboard", "dashboard.json");
-  const accountPath =
-    process.env.DASHBOARD_ACCOUNT_PATH ??
+  const authStorePath =
+    process.env.DASHBOARD_AUTH_STORE_PATH ??
     join(workspace, ".dashboard", "accounts.json");
-  const calendarDataPath =
-    process.env.DASHBOARD_CALENDAR_DATA_PATH ??
-    join(workspace, ".dashboard", "google-calendar.json");
+  const integrationDataDirectory =
+    process.env.DASHBOARD_INTEGRATION_DATA_DIR ??
+    join(workspace, ".dashboard", "integrations");
   const service = createService({
     persistence: createFilePersistence(dashboardPath),
-    accountStore: createFileAccountStore(accountPath),
+    authStore: createFileAuthStore(authStorePath),
   });
   const tokenProvider: GoogleCalendarTokenProvider = async () => {
     throw new Error("Google Calendar credentials are not configured");
@@ -169,17 +159,17 @@ async function startServer() {
       return;
     }
 
-    if (request.url === "/api/google-calendar") {
+    if (request.url === "/api/integrations/refresh") {
       try {
         const chunks: Buffer[] = [];
         for await (const chunk of request) chunks.push(Buffer.from(chunk));
-        const result = await handleGoogleCalendarRequest(
+        const result = await handleIntegrationRefreshRequest(
           new Request(`http://dashboard${request.url}`, {
             method: request.method,
             headers: authorizationHeaders(request),
             body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
           }),
-          calendarDataPath,
+          integrationDataDirectory,
           { tokenProvider, service },
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));
@@ -187,7 +177,7 @@ async function startServer() {
       } catch (error) {
         response.writeHead(400, { "content-type": "text/plain" });
         response.end(
-          error instanceof Error ? error.message : "Calendar request failed",
+          error instanceof Error ? error.message : "Refresh failed",
         );
       }
       return;

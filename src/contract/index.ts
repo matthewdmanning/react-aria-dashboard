@@ -147,6 +147,15 @@ export const dashboardConfigurationSchema = z
   })
   .strict();
 
+/**
+ * What `read("all")` returns: the categories the caller may read, with the rest
+ * omitted. Parsing a projection with the full schema would reject a caller who
+ * is denied one category, which is what omitting rather than failing avoids.
+ */
+export const readableDashboardSchema = dashboardConfigurationSchema.partial();
+
+export type ReadableDashboard = z.infer<typeof readableDashboardSchema>;
+
 export type DashboardConfiguration = z.infer<
   typeof dashboardConfigurationSchema
 >;
