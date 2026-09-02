@@ -8,15 +8,19 @@ import type { Mutation } from "../contract";
 import {
   createFilePersistence,
   createService,
+  permissionRank,
   ServiceFailure,
   type DashboardService,
   type ServiceFailureCode,
 } from "../service";
-import type {
-  FetchCalendar,
-  GoogleCalendarTokenProvider,
-} from "./integrations/google-calendar";
-import { refreshCardQueries } from "./integrations";
+import type { CredentialStore } from "./integrations/credentials";
+import { createFileCredentialStore } from "./integrations/credentials";
+import type { FetchCalendar } from "./integrations/google-calendar";
+import {
+  integrationPulls,
+  refreshCardQueries,
+  type TokenProvider,
+} from "./integrations";
 
 const readScopes = [
   "all",
@@ -31,6 +35,7 @@ const readScopes = [
 export async function handleDashboardConfigurationRequest(
   request: Request,
   service: DashboardService,
+  credentials?: CredentialStore,
 ): Promise<Response> {
   try {
     if (request.method === "GET") {
@@ -47,12 +52,26 @@ export async function handleDashboardConfigurationRequest(
     }
 
     if (request.method === "POST") {
-      return Response.json(
-        await service.apply(
-          (await request.json()) as readonly Mutation[],
-          credentialFromRequest(request),
-        ),
+      const mutations = (await request.json()) as readonly Mutation[];
+      const result = await service.apply(
+        mutations,
+        credentialFromRequest(request),
       );
+      // Revoking an integration's authorization rides along with removing it
+      // (D16) — Settings has no separate "revoke" action, and a credential
+      // outliving the connection it was authorized for is a leak.
+      if (credentials) {
+        const removed = mutations.filter(
+          (
+            mutation,
+          ): mutation is Extract<Mutation, { type: "remove-integration" }> =>
+            mutation.type === "remove-integration",
+        );
+        await Promise.all(
+          removed.map((mutation) => credentials.remove(mutation.integrationId)),
+        );
+      }
+      return Response.json(result);
     }
 
     return new Response("Method not allowed", { status: 405 });
@@ -130,7 +149,7 @@ export async function handleIntegrationRefreshRequest(
   request: Request,
   dependencies: {
     service: DashboardService;
-    tokenProvider: GoogleCalendarTokenProvider;
+    tokenProvider: TokenProvider;
     fetch?: FetchCalendar;
   },
 ): Promise<Response> {
@@ -147,6 +166,56 @@ export async function handleIntegrationRefreshRequest(
   );
 }
 
+/** How Settings learns which services can be connected, without naming one itself. */
+export function handleIntegrationTypesRequest(): Response {
+  return Response.json(Object.keys(integrationPulls));
+}
+
+/**
+ * The authorization handoff: stores the secret for one connection outside
+ * dashboard configuration. Gated at `integrations: edit` — the connection
+ * already exists (via `add-integration`); authorizing it changes something
+ * that exists rather than creating or destroying it (D20).
+ */
+export async function handleIntegrationAuthorizeRequest(
+  request: Request,
+  dependencies: { service: DashboardService; credentials: CredentialStore },
+): Promise<Response> {
+  try {
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const credential = credentialFromRequest(request);
+    const role = await dependencies.service.read("role", credential);
+    if (permissionRank[role.permissions.integrations] < permissionRank.edit) {
+      throw new ServiceFailure(
+        "permission-denied",
+        "Permission denied: integrations: edit",
+      );
+    }
+
+    const body = (await request.json()) as {
+      integrationId?: string;
+      credential?: string;
+    };
+    if (!body.integrationId || !body.credential) {
+      return Response.json(
+        {
+          code: "invalid-request",
+          message: "integrationId and credential are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    await dependencies.credentials.set(body.integrationId, body.credential);
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
 async function startServer() {
   const workspace = resolve(process.env.DASHBOARD_WORKSPACE ?? ".");
   const dashboardPath =
@@ -155,12 +224,22 @@ async function startServer() {
   const authStorePath =
     process.env.DASHBOARD_AUTH_STORE_PATH ??
     join(workspace, ".dashboard", "accounts.json");
+  const credentialsPath =
+    process.env.DASHBOARD_INTEGRATION_CREDENTIALS_PATH ??
+    join(workspace, ".dashboard", "integration-credentials.json");
   const service = createService({
     persistence: createFilePersistence(dashboardPath),
     authStore: createFileAuthStore(authStorePath),
   });
-  const tokenProvider: GoogleCalendarTokenProvider = async () => {
-    throw new Error("Google Calendar credentials are not configured");
+  const credentials = createFileCredentialStore(credentialsPath);
+  const tokenProvider: TokenProvider = async (integrationId) => {
+    const credential = await credentials.get(integrationId);
+    if (!credential) {
+      throw new Error(
+        `Integration '${integrationId}' is not authorized. Connect it in Settings.`,
+      );
+    }
+    return credential;
   };
   const vite = await createViteServer({ server: { middlewareMode: true } });
   const server = createServer(async (request, response) => {
@@ -175,12 +254,43 @@ async function startServer() {
             body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
           }),
           service,
+          credentials,
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));
         response.end(Buffer.from(await result.arrayBuffer()));
       } catch (error) {
         response.writeHead(400, { "content-type": "text/plain" });
         response.end(error instanceof Error ? error.message : "Invalid request");
+      }
+      return;
+    }
+
+    if (request.url === "/api/integrations/types") {
+      const result = handleIntegrationTypesRequest();
+      response.writeHead(result.status, Object.fromEntries(result.headers));
+      response.end(Buffer.from(await result.arrayBuffer()));
+      return;
+    }
+
+    if (request.url === "/api/integrations/authorize") {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const result = await handleIntegrationAuthorizeRequest(
+          new Request(`http://dashboard${request.url}`, {
+            method: request.method,
+            headers: authorizationHeaders(request),
+            body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
+          }),
+          { service, credentials },
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(
+          error instanceof Error ? error.message : "Authorization failed",
+        );
       }
       return;
     }

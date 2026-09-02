@@ -1,12 +1,14 @@
-export type GoogleCalendarTokenProvider = () => Promise<string>;
+import type { TokenProvider } from "./index";
+
 export type FetchCalendar = (
   input: string,
   init?: RequestInit,
 ) => Promise<Response>;
 
 export interface GoogleCalendarPullOptions {
+  integrationId: string;
   query: unknown;
-  tokenProvider: GoogleCalendarTokenProvider;
+  tokenProvider: TokenProvider;
   fetch?: FetchCalendar;
 }
 
@@ -22,12 +24,13 @@ function calendarIdFromQuery(query: unknown): string {
 }
 
 export async function pullGoogleCalendar({
+  integrationId,
   query,
   tokenProvider,
   fetch: fetchCalendar = globalThis.fetch,
 }: GoogleCalendarPullOptions): Promise<unknown> {
   const calendarId = calendarIdFromQuery(query);
-  const token = await tokenProvider();
+  const token = await tokenProvider(integrationId);
   const response = await fetchCalendar(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     { headers: { Authorization: `Bearer ${token}` } },
