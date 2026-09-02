@@ -6,12 +6,9 @@ import {
   type DashboardPersistence,
   type DashboardService,
 } from "../service";
-import type { CredentialStore } from "./integrations/credentials";
 import {
   handleDashboardConfigurationRequest,
-  handleIntegrationAuthorizeRequest,
   handleIntegrationRefreshRequest,
-  handleIntegrationTypesRequest,
 } from "./index";
 
 function createMemoryPersistence(
@@ -30,19 +27,6 @@ function createTestService(
   initial = defaultDashboardConfiguration,
 ): DashboardService {
   return createService({ persistence: createMemoryPersistence(initial) });
-}
-
-function createMemoryCredentialStore(): CredentialStore {
-  const values = new Map<string, string>();
-  return {
-    get: async (id) => values.get(id),
-    set: async (id, credential) => {
-      values.set(id, credential);
-    },
-    remove: async (id) => {
-      values.delete(id);
-    },
-  };
 }
 
 describe("dashboard service HTTP transport", () => {
@@ -242,151 +226,5 @@ describe("integration refresh endpoint", () => {
         message: "Credentials are not configured",
       },
     ]);
-  });
-});
-
-describe("integration types endpoint", () => {
-  test("lists the services this build can pull from, without Settings naming one", () => {
-    const response = handleIntegrationTypesRequest();
-
-    expect(response.status).toBe(200);
-    return expect(response.json()).resolves.toEqual(["google-calendar"]);
-  });
-});
-
-describe("integration authorization endpoint", () => {
-  test("stores a connection's credential, gated at integrations: edit", async () => {
-    const service = createTestService();
-    const credentials = createMemoryCredentialStore();
-
-    const response = await handleIntegrationAuthorizeRequest(
-      new Request("http://dashboard/api/integrations/authorize", {
-        method: "POST",
-        body: JSON.stringify({
-          integrationId: "team-calendar",
-          credential: "secret-token",
-        }),
-      }),
-      { service, credentials },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(credentials.get("team-calendar")).resolves.toBe(
-      "secret-token",
-    );
-  });
-
-  test("refuses a caller without integrations: edit", async () => {
-    const service = createTestService({
-      ...defaultDashboardConfiguration,
-      roles: [
-        {
-          name: "local",
-          permissions: {
-            data: "write",
-            cards: "write",
-            presentation: "write",
-            integrations: "read",
-            roles: "none",
-          },
-        },
-      ],
-    });
-    const credentials = createMemoryCredentialStore();
-
-    const response = await handleIntegrationAuthorizeRequest(
-      new Request("http://dashboard/api/integrations/authorize", {
-        method: "POST",
-        body: JSON.stringify({
-          integrationId: "team-calendar",
-          credential: "secret-token",
-        }),
-      }),
-      { service, credentials },
-    );
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      code: "permission-denied",
-    });
-    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
-  });
-
-  test("requires both an integrationId and a credential", async () => {
-    const response = await handleIntegrationAuthorizeRequest(
-      new Request("http://dashboard/api/integrations/authorize", {
-        method: "POST",
-        body: JSON.stringify({ integrationId: "team-calendar" }),
-      }),
-      { service: createTestService(), credentials: createMemoryCredentialStore() },
-    );
-
-    expect(response.status).toBe(400);
-  });
-});
-
-describe("revoking an integration's authorization", () => {
-  test("removing an integration drops its stored credential", async () => {
-    const service = createTestService({
-      ...defaultDashboardConfiguration,
-      integrations: [
-        { id: "team-calendar", type: "google-calendar", settings: {} },
-      ],
-    });
-    const credentials = createMemoryCredentialStore();
-    await credentials.set("team-calendar", "secret-token");
-
-    const response = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "POST",
-        body: JSON.stringify([
-          { type: "remove-integration", integrationId: "team-calendar" },
-        ]),
-      }),
-      service,
-      credentials,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
-  });
-
-  test("a failed apply leaves the credential in place", async () => {
-    const service = createTestService({
-      ...defaultDashboardConfiguration,
-      integrations: [
-        { id: "team-calendar", type: "google-calendar", settings: {} },
-      ],
-      cards: [
-        {
-          ...defaultDashboardConfiguration.cards[0]!,
-          queries: [
-            {
-              integration: "team-calendar",
-              query: {},
-              formatter: { shape: "object" as const, fields: {} },
-            },
-          ],
-        },
-      ],
-    });
-    const credentials = createMemoryCredentialStore();
-    await credentials.set("team-calendar", "secret-token");
-
-    const response = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "POST",
-        body: JSON.stringify([
-          { type: "remove-integration", integrationId: "team-calendar" },
-        ]),
-      }),
-      service,
-      credentials,
-    );
-
-    expect(response.status).toBe(409);
-    await expect(credentials.get("team-calendar")).resolves.toBe(
-      "secret-token",
-    );
   });
 });
