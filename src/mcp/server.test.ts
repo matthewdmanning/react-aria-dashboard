@@ -10,6 +10,7 @@ import {
   type DashboardPersistence,
   type DashboardService,
 } from "../service";
+import type { CredentialStore } from "../server/integrations/credentials";
 import { createDashboardMcpServer } from "./server";
 
 function createMemoryPersistence(
@@ -24,10 +25,27 @@ function createMemoryPersistence(
   };
 }
 
+function createMemoryCredentialStore(): CredentialStore {
+  const values = new Map<string, string>();
+  return {
+    get: async (id) => values.get(id),
+    set: async (id, credential) => {
+      values.set(id, credential);
+    },
+    remove: async (id) => {
+      values.delete(id);
+    },
+  };
+}
+
 function createTestService(
   initial: DashboardConfiguration = defaultDashboardConfiguration,
+  extra: { credentials?: CredentialStore; connectableTypes?: string[] } = {},
 ): DashboardService {
-  return createService({ persistence: createMemoryPersistence(initial) });
+  return createService({
+    persistence: createMemoryPersistence(initial),
+    ...extra,
+  });
 }
 
 /**
@@ -74,6 +92,7 @@ describe("dashboard MCP server", () => {
         "add-integration",
         "edit-integration",
         "remove-integration",
+        "authorize-integration",
       ]),
     );
   });
@@ -162,5 +181,81 @@ describe("dashboard MCP server", () => {
 
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ code: "unknown-id" });
+  });
+});
+
+describe("integration authorization through MCP", () => {
+  test("authorizes a connection through the same enforcement point as the HTTP adapter", async () => {
+    const credentials = createMemoryCredentialStore();
+    const client = await connectClient(
+      createTestService(defaultDashboardConfiguration, { credentials }),
+    );
+
+    const result = await client.callTool({
+      name: "authorize-integration",
+      arguments: { integrationId: "team-calendar", credential: "secret-token" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    await expect(credentials.get("team-calendar")).resolves.toBe(
+      "secret-token",
+    );
+  });
+
+  test("a role below integrations: edit is refused, the same as through HTTP", async () => {
+    const credentials = createMemoryCredentialStore();
+    const restricted: DashboardConfiguration = {
+      ...structuredClone(defaultDashboardConfiguration),
+      roles: [
+        {
+          name: "local",
+          permissions: {
+            data: "write",
+            cards: "write",
+            presentation: "write",
+            integrations: "read",
+            roles: "none",
+          },
+        },
+      ],
+    };
+    const client = await connectClient(
+      createTestService(restricted, { credentials }),
+    );
+
+    const result = await client.callTool({
+      name: "authorize-integration",
+      arguments: { integrationId: "team-calendar", credential: "secret-token" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      code: "permission-denied",
+    });
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
+  });
+
+  test("removing an integration through MCP leaves no credential behind", async () => {
+    const credentials = createMemoryCredentialStore();
+    await credentials.set("team-calendar", "secret-token");
+    const client = await connectClient(
+      createTestService(
+        {
+          ...defaultDashboardConfiguration,
+          integrations: [
+            { id: "team-calendar", type: "google-calendar", settings: {} },
+          ],
+        },
+        { credentials },
+      ),
+    );
+
+    const result = await client.callTool({
+      name: "remove-integration",
+      arguments: { integrationId: "team-calendar" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
   });
 });

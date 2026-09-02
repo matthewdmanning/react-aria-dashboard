@@ -20,8 +20,12 @@ describe("Google Calendar integration contract", () => {
     const fetchCalendar = vi.fn(async () => Response.json(source));
 
     const pulled = await pullGoogleCalendar({
+      integrationId: "work-calendar",
       query: { calendarId: "team@example.com" },
-      tokenProvider: async () => "access-token",
+      tokenProvider: async (integrationId) => {
+        expect(integrationId).toBe("work-calendar");
+        return "access-token";
+      },
       fetch: fetchCalendar,
     });
 
@@ -35,6 +39,7 @@ describe("Google Calendar integration contract", () => {
   test("refuses a query with no calendarId", async () => {
     await expect(
       pullGoogleCalendar({
+        integrationId: "work-calendar",
         query: {},
         tokenProvider: async () => "access-token",
       }),
@@ -44,6 +49,7 @@ describe("Google Calendar integration contract", () => {
   test("surfaces a failed fetch", async () => {
     await expect(
       pullGoogleCalendar({
+        integrationId: "work-calendar",
         query: { calendarId: "team" },
         tokenProvider: async () => "access-token",
         fetch: async () => new Response("unavailable", { status: 503 }),

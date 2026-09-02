@@ -5,7 +5,21 @@ import {
   type DashboardConfiguration,
   type Mutation,
 } from "../contract";
+import type { CredentialStore } from "../server/integrations/credentials";
 import { createService, type DashboardPersistence } from "./index";
+
+function createMemoryCredentialStore(): CredentialStore {
+  const values = new Map<string, string>();
+  return {
+    get: async (id) => values.get(id),
+    set: async (id, credential) => {
+      values.set(id, credential);
+    },
+    remove: async (id) => {
+      values.delete(id);
+    },
+  };
+}
 
 function createMemoryPersistence(
   initial = defaultDashboardConfiguration,
@@ -335,5 +349,129 @@ describe("dashboard service", () => {
     await expect(
       service.apply([{ type: "remove-theme", themeId: "calm" }]),
     ).rejects.toThrow("because dashboard 'home' uses it");
+  });
+});
+
+describe("integration authorization", () => {
+  test("stores a connection's credential, gated at integrations: edit", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createService({
+      persistence: createMemoryPersistence(),
+      credentials,
+    });
+
+    await service.authorize("team-calendar", "secret-token");
+
+    await expect(credentials.get("team-calendar")).resolves.toBe(
+      "secret-token",
+    );
+  });
+
+  test("refuses a caller without integrations: edit", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createService({
+      persistence: createMemoryPersistence(
+        withLocalPermissions({
+          data: "write",
+          cards: "write",
+          presentation: "write",
+          integrations: "read",
+          roles: "none",
+        }),
+      ),
+      credentials,
+    });
+
+    await expect(
+      service.authorize("team-calendar", "secret-token"),
+    ).rejects.toThrow("integrations: edit");
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
+  });
+
+  test("removing an integration drops its stored credential, whichever adapter asked", async () => {
+    const credentials = createMemoryCredentialStore();
+    await credentials.set("team-calendar", "secret-token");
+    const service = createService({
+      persistence: createMemoryPersistence({
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      }),
+      credentials,
+    });
+
+    await service.apply([
+      { type: "remove-integration", integrationId: "team-calendar" },
+    ]);
+
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
+  });
+
+  test("a failed apply leaves the credential in place", async () => {
+    const credentials = createMemoryCredentialStore();
+    await credentials.set("team-calendar", "secret-token");
+    const service = createService({
+      persistence: createMemoryPersistence({
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+        cards: [
+          {
+            ...defaultDashboardConfiguration.cards[0]!,
+            queries: [
+              {
+                integration: "team-calendar",
+                query: {},
+                formatter: { shape: "object", fields: {} },
+              },
+            ],
+          },
+        ],
+      }),
+      credentials,
+    });
+
+    await expect(
+      service.apply([
+        { type: "remove-integration", integrationId: "team-calendar" },
+      ]),
+    ).rejects.toThrow("because card 'welcome' uses it");
+    await expect(credentials.get("team-calendar")).resolves.toBe(
+      "secret-token",
+    );
+  });
+});
+
+describe("connectable integration types", () => {
+  test("lists the services this build can pull from, gated at integrations: read", async () => {
+    const service = createService({
+      persistence: createMemoryPersistence(),
+      connectableTypes: ["google-calendar"],
+    });
+
+    await expect(service.connectableTypes()).resolves.toEqual([
+      "google-calendar",
+    ]);
+  });
+
+  test("refuses a caller with no integrations access", async () => {
+    const service = createService({
+      persistence: createMemoryPersistence(
+        withLocalPermissions({
+          data: "write",
+          cards: "write",
+          presentation: "write",
+          integrations: "none",
+          roles: "none",
+        }),
+      ),
+      connectableTypes: ["google-calendar"],
+    });
+
+    await expect(service.connectableTypes()).rejects.toThrow(
+      "integrations: read",
+    );
   });
 });

@@ -12,11 +12,13 @@ import {
   type DashboardService,
   type ServiceFailureCode,
 } from "../service";
-import type {
-  FetchCalendar,
-  GoogleCalendarTokenProvider,
-} from "./integrations/google-calendar";
-import { refreshCardQueries } from "./integrations";
+import { createFileCredentialStore } from "./integrations/credentials";
+import type { FetchCalendar } from "./integrations/google-calendar";
+import {
+  integrationPulls,
+  refreshCardQueries,
+  type TokenProvider,
+} from "./integrations";
 
 const readScopes = [
   "all",
@@ -70,6 +72,7 @@ const failureStatus: Record<ServiceFailureCode, number> = {
   "unknown-id": 404,
   "duplicate-id": 409,
   "in-use": 409,
+  "credentials-unavailable": 500,
 };
 
 function failureResponse(error: unknown): Response {
@@ -130,7 +133,7 @@ export async function handleIntegrationRefreshRequest(
   request: Request,
   dependencies: {
     service: DashboardService;
-    tokenProvider: GoogleCalendarTokenProvider;
+    tokenProvider: TokenProvider;
     fetch?: FetchCalendar;
   },
 ): Promise<Response> {
@@ -147,6 +150,65 @@ export async function handleIntegrationRefreshRequest(
   );
 }
 
+/**
+ * How Settings learns which services can be connected, without naming one
+ * itself. Resolves a role like every other request (D4) — gated at
+ * `integrations: read` inside `service.connectableTypes`, the one
+ * enforcement point, rather than a second check here.
+ */
+export async function handleIntegrationTypesRequest(
+  request: Request,
+  service: DashboardService,
+): Promise<Response> {
+  try {
+    return Response.json(
+      await service.connectableTypes(credentialFromRequest(request)),
+    );
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
+/**
+ * The authorization handoff: hands a connection's secret to
+ * `service.authorize`, which is the enforcement point (D1, D4) -- the same
+ * one MCP's `authorize-integration` tool calls, so a role check here would
+ * be a second door.
+ */
+export async function handleIntegrationAuthorizeRequest(
+  request: Request,
+  service: DashboardService,
+): Promise<Response> {
+  try {
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const body = (await request.json()) as {
+      integrationId?: string;
+      credential?: string;
+    };
+    if (!body.integrationId || !body.credential) {
+      return Response.json(
+        {
+          code: "invalid-request",
+          message: "integrationId and credential are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    await service.authorize(
+      body.integrationId,
+      body.credential,
+      credentialFromRequest(request),
+    );
+    return Response.json({ ok: true });
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
 async function startServer() {
   const workspace = resolve(process.env.DASHBOARD_WORKSPACE ?? ".");
   const dashboardPath =
@@ -155,12 +217,26 @@ async function startServer() {
   const authStorePath =
     process.env.DASHBOARD_AUTH_STORE_PATH ??
     join(workspace, ".dashboard", "accounts.json");
+  const credentialsPath =
+    process.env.DASHBOARD_INTEGRATION_CREDENTIALS_PATH ??
+    join(workspace, ".dashboard", "integration-credentials.json");
+  const credentials = createFileCredentialStore(credentialsPath);
   const service = createService({
     persistence: createFilePersistence(dashboardPath),
     authStore: createFileAuthStore(authStorePath),
+    credentials,
+    connectableTypes: Object.keys(integrationPulls),
   });
-  const tokenProvider: GoogleCalendarTokenProvider = async () => {
-    throw new Error("Google Calendar credentials are not configured");
+  // Internal plumbing for the server's own outbound calls, not a caller-facing
+  // operation -- reads the same store `service` composes, directly.
+  const tokenProvider: TokenProvider = async (integrationId) => {
+    const credential = await credentials.get(integrationId);
+    if (!credential) {
+      throw new Error(
+        `Integration '${integrationId}' is not authorized. Connect it in Settings.`,
+      );
+    }
+    return credential;
   };
   const vite = await createViteServer({ server: { middlewareMode: true } });
   const server = createServer(async (request, response) => {
@@ -181,6 +257,47 @@ async function startServer() {
       } catch (error) {
         response.writeHead(400, { "content-type": "text/plain" });
         response.end(error instanceof Error ? error.message : "Invalid request");
+      }
+      return;
+    }
+
+    if (request.url === "/api/integrations/types") {
+      try {
+        const result = await handleIntegrationTypesRequest(
+          new Request(`http://dashboard${request.url}`, {
+            method: request.method,
+            headers: authorizationHeaders(request),
+          }),
+          service,
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(error instanceof Error ? error.message : "Invalid request");
+      }
+      return;
+    }
+
+    if (request.url === "/api/integrations/authorize") {
+      try {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const result = await handleIntegrationAuthorizeRequest(
+          new Request(`http://dashboard${request.url}`, {
+            method: request.method,
+            headers: authorizationHeaders(request),
+            body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
+          }),
+          service,
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(
+          error instanceof Error ? error.message : "Authorization failed",
+        );
       }
       return;
     }

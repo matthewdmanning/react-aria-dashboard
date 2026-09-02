@@ -4,14 +4,18 @@ import {
   type Integration,
 } from "../../contract";
 import type { DashboardService } from "../../service";
-import {
-  pullGoogleCalendar,
-  type FetchCalendar,
-  type GoogleCalendarTokenProvider,
-} from "./google-calendar";
+import { pullGoogleCalendar, type FetchCalendar } from "./google-calendar";
+
+/**
+ * Resolves the authorization secret for one connection (an integration or a
+ * backup target — D16), by the id that names it. The one seam every pull
+ * goes through to reach a stored credential; no adapter reads a store of
+ * its own.
+ */
+export type TokenProvider = (connectionId: string) => Promise<string>;
 
 export interface PullContext {
-  tokenProvider: GoogleCalendarTokenProvider;
+  tokenProvider: TokenProvider;
   fetch?: FetchCalendar;
 }
 
@@ -26,8 +30,13 @@ export type IntegrationPull = (
  * is named — callers dispatch on what an integration says it is.
  */
 export const integrationPulls: Record<string, IntegrationPull> = {
-  "google-calendar": (_integration, query, { tokenProvider, fetch }) =>
-    pullGoogleCalendar({ query, tokenProvider, fetch }),
+  "google-calendar": (integration, query, { tokenProvider, fetch }) =>
+    pullGoogleCalendar({
+      integrationId: integration.id,
+      query,
+      tokenProvider,
+      fetch,
+    }),
 };
 
 export interface QueryRefresh {
