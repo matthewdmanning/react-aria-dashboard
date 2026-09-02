@@ -1,8 +1,3 @@
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-
-import type { Integration } from "../../contract";
-
 export type GoogleCalendarTokenProvider = () => Promise<string>;
 export type FetchCalendar = (
   input: string,
@@ -10,49 +5,28 @@ export type FetchCalendar = (
 ) => Promise<Response>;
 
 export interface GoogleCalendarPullOptions {
-  integrations: Integration[];
-  dataPath: string;
+  query: unknown;
   tokenProvider: GoogleCalendarTokenProvider;
   fetch?: FetchCalendar;
-  integrationId?: string;
 }
 
-function calendarIdFromIntegrations(
-  integrations: Integration[],
-  integrationId?: string,
-) {
-  const integration = integrations.find(
-    (candidate) =>
-      candidate.type === "google-calendar" &&
-      (integrationId === undefined || candidate.id === integrationId),
-  );
-  const calendarId = integration?.settings.calendarId;
+function calendarIdFromQuery(query: unknown): string {
+  const calendarId =
+    query !== null && typeof query === "object" && "calendarId" in query
+      ? (query as { calendarId: unknown }).calendarId
+      : undefined;
   if (typeof calendarId !== "string" || calendarId.length === 0) {
-    throw new Error("No configured Google Calendar integration");
+    throw new Error("Query is missing a calendarId");
   }
   return calendarId;
 }
 
-async function writeAtomically(path: string, content: string) {
-  const temporaryPath = `${path}.${process.pid}.tmp`;
-  await mkdir(dirname(path), { recursive: true });
-  try {
-    await writeFile(temporaryPath, content);
-    await rename(temporaryPath, path);
-  } catch (error) {
-    await unlink(temporaryPath).catch(() => undefined);
-    throw error;
-  }
-}
-
 export async function pullGoogleCalendar({
-  integrations,
-  dataPath,
+  query,
   tokenProvider,
   fetch: fetchCalendar = globalThis.fetch,
-  integrationId,
 }: GoogleCalendarPullOptions): Promise<unknown> {
-  const calendarId = calendarIdFromIntegrations(integrations, integrationId);
+  const calendarId = calendarIdFromQuery(query);
   const token = await tokenProvider();
   const response = await fetchCalendar(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -61,7 +35,5 @@ export async function pullGoogleCalendar({
   if (!response.ok)
     throw new Error(`Google Calendar pull failed: ${response.status}`);
 
-  const source = await response.json();
-  await writeAtomically(dataPath, `${JSON.stringify(source, null, 2)}\n`);
-  return source;
+  return response.json();
 }

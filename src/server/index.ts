@@ -16,7 +16,7 @@ import type {
   FetchCalendar,
   GoogleCalendarTokenProvider,
 } from "./integrations/google-calendar";
-import { refreshIntegrations } from "./integrations";
+import { refreshCardQueries } from "./integrations";
 
 const readScopes = [
   "all",
@@ -128,7 +128,6 @@ function credentialFromRequest(request: Request): string | undefined {
 
 export async function handleIntegrationRefreshRequest(
   request: Request,
-  dataDirectory: string,
   dependencies: {
     service: DashboardService;
     tokenProvider: GoogleCalendarTokenProvider;
@@ -138,12 +137,13 @@ export async function handleIntegrationRefreshRequest(
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
-  const integrations = await dependencies.service.read(
-    "integrations",
-    credentialFromRequest(request),
-  );
+  const credential = credentialFromRequest(request);
+  const [cards, integrations] = await Promise.all([
+    dependencies.service.read("cards", credential),
+    dependencies.service.read("integrations", credential),
+  ]);
   return Response.json(
-    await refreshIntegrations(integrations, { ...dependencies, dataDirectory }),
+    await refreshCardQueries(cards, integrations, { ...dependencies, credential }),
   );
 }
 
@@ -155,9 +155,6 @@ async function startServer() {
   const authStorePath =
     process.env.DASHBOARD_AUTH_STORE_PATH ??
     join(workspace, ".dashboard", "accounts.json");
-  const integrationDataDirectory =
-    process.env.DASHBOARD_INTEGRATION_DATA_DIR ??
-    join(workspace, ".dashboard", "integrations");
   const service = createService({
     persistence: createFilePersistence(dashboardPath),
     authStore: createFileAuthStore(authStorePath),
@@ -198,7 +195,6 @@ async function startServer() {
             headers: authorizationHeaders(request),
             body: chunks.length ? Buffer.concat(chunks).toString("utf8") : undefined,
           }),
-          integrationDataDirectory,
           { tokenProvider, service },
         );
         response.writeHead(result.status, Object.fromEntries(result.headers));

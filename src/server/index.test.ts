@@ -1,6 +1,3 @@
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
 import { defaultDashboardConfiguration } from "../contract";
@@ -116,19 +113,52 @@ describe("dashboard service HTTP transport", () => {
 });
 
 describe("integration refresh endpoint", () => {
-  test("pulls every integration read through the service", async () => {
-    const dataDirectory = await mkdtemp(join(tmpdir(), "integration-api-"));
-    const source = { items: [{ id: "event-1", summary: "Planning" }] };
+  const calendarQuery = {
+    integration: "team-calendar",
+    query: { calendarId: "team" },
+    formatter: {
+      shape: "array" as const,
+      from: ["items"],
+      into: "events",
+      fields: {
+        id: { from: ["id"], coerce: "string" as const },
+        title: { from: ["summary"], default: "Untitled event" },
+        start: { from: ["start.dateTime"] },
+      },
+    },
+  };
+
+  test("runs every card's queries through the service and patches card state", async () => {
+    const source = { items: [{ id: "event-1", summary: "Planning", start: { dateTime: "2026-08-27T09:00:00-04:00" } }] };
     const pull = vi.fn(async () => Response.json(source));
     const service = createTestService({
       ...defaultDashboardConfiguration,
       integrations: [
-        {
-          id: "team-calendar",
-          type: "google-calendar",
-          settings: { calendarId: "team" },
-        },
+        { id: "team-calendar", type: "google-calendar", settings: {} },
         { id: "unknown", type: "not-built-in", settings: {} },
+      ],
+      cards: [
+        ...defaultDashboardConfiguration.cards,
+        {
+          id: "calendar-card",
+          title: "Calendar",
+          template: "calendar",
+          state: { events: [] },
+          queries: [calendarQuery],
+        },
+        {
+          id: "unsupported-card",
+          title: "Unsupported",
+          template: "message",
+          state: { message: "unchanged" },
+          queries: [
+            {
+              integration: "unknown",
+              query: {},
+              formatter: { shape: "object" as const, fields: {} },
+            },
+          ],
+        },
       ],
     });
 
@@ -136,29 +166,42 @@ describe("integration refresh endpoint", () => {
       new Request("http://dashboard/api/integrations/refresh", {
         method: "POST",
       }),
-      dataDirectory,
       { service, tokenProvider: async () => "access-token", fetch: pull },
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([
-      { id: "team-calendar", status: "refreshed" },
-      { id: "unknown", status: "unsupported" },
+      { cardId: "calendar-card", status: "refreshed" },
+      { cardId: "unsupported-card", status: "unsupported" },
     ]);
-    await expect(
-      readFile(join(dataDirectory, "team-calendar.json"), "utf8"),
-    ).resolves.toContain('"summary": "Planning"');
+
+    const cards = await service.read("cards");
+    expect(cards.find(({ id }) => id === "calendar-card")).toMatchObject({
+      state: {
+        events: [
+          { id: "event-1", title: "Planning", start: "2026-08-27T09:00:00-04:00" },
+        ],
+      },
+    });
+    expect(cards.find(({ id }) => id === "unsupported-card")).toMatchObject({
+      state: { message: "unchanged" },
+    });
   });
 
-  test("reports one integration's failure without stopping the rest", async () => {
-    const dataDirectory = await mkdtemp(join(tmpdir(), "integration-api-"));
+  test("reports one card query's failure without stopping the rest", async () => {
     const service = createTestService({
       ...defaultDashboardConfiguration,
       integrations: [
+        { id: "team-calendar", type: "google-calendar", settings: {} },
+      ],
+      cards: [
+        ...defaultDashboardConfiguration.cards,
         {
-          id: "team-calendar",
-          type: "google-calendar",
-          settings: { calendarId: "team" },
+          id: "calendar-card",
+          title: "Calendar",
+          template: "calendar",
+          state: { events: [] },
+          queries: [calendarQuery],
         },
       ],
     });
@@ -167,7 +210,6 @@ describe("integration refresh endpoint", () => {
       new Request("http://dashboard/api/integrations/refresh", {
         method: "POST",
       }),
-      dataDirectory,
       {
         service,
         tokenProvider: async () => {
@@ -179,7 +221,7 @@ describe("integration refresh endpoint", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([
       {
-        id: "team-calendar",
+        cardId: "calendar-card",
         status: "failed",
         message: "Credentials are not configured",
       },

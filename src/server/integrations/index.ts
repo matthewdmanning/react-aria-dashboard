@@ -1,6 +1,9 @@
-import { join } from "node:path";
-
-import type { Integration } from "../../contract";
+import {
+  compileFormatterSpec,
+  type Card,
+  type Integration,
+} from "../../contract";
+import type { DashboardService } from "../../service";
 import {
   pullGoogleCalendar,
   type FetchCalendar,
@@ -8,17 +11,13 @@ import {
 } from "./google-calendar";
 
 export interface PullContext {
-  // ponytail: a pull writes its own file, which is a second write path past the
-  // service. #67 replaces it — a pulled result becomes card state through a
-  // patch-card-state mutation, and nothing else persists it.
-  /** Where an integration's pulled data is written, one file per integration. */
-  dataDirectory: string;
   tokenProvider: GoogleCalendarTokenProvider;
   fetch?: FetchCalendar;
 }
 
 export type IntegrationPull = (
   integration: Integration,
+  query: unknown,
   context: PullContext,
 ) => Promise<unknown>;
 
@@ -27,47 +26,65 @@ export type IntegrationPull = (
  * is named — callers dispatch on what an integration says it is.
  */
 export const integrationPulls: Record<string, IntegrationPull> = {
-  "google-calendar": (integration, { dataDirectory, tokenProvider, fetch }) =>
-    pullGoogleCalendar({
-      integrations: [integration],
-      integrationId: integration.id,
-      dataPath: join(dataDirectory, `${integration.id}.json`),
-      tokenProvider,
-      fetch,
-    }),
+  "google-calendar": (_integration, query, { tokenProvider, fetch }) =>
+    pullGoogleCalendar({ query, tokenProvider, fetch }),
 };
 
-export interface IntegrationRefresh {
-  id: string;
+export interface QueryRefresh {
+  cardId: string;
   status: "refreshed" | "unsupported" | "failed";
   message?: string;
 }
 
 /**
- * Pulls every integration, reporting per integration. One failure does not stop
- * the rest — a manual refresh should do as much as it can.
+ * Runs every card's queries: pulls each query's integration, shapes the
+ * result with the query's formatter, and applies it as the card's new state
+ * through `service.apply`. Nothing else persists a pull — a pulled result is
+ * transient (fetch, format, apply, discard); if a formatter changes, re-pull.
+ * One query's failure does not stop the rest.
  */
-export async function refreshIntegrations(
+export async function refreshCardQueries(
+  cards: readonly Card[],
   integrations: readonly Integration[],
-  context: PullContext,
-): Promise<IntegrationRefresh[]> {
-  const refreshes: IntegrationRefresh[] = [];
+  context: PullContext & { service: DashboardService; credential?: string },
+): Promise<QueryRefresh[]> {
+  const refreshes: QueryRefresh[] = [];
 
-  for (const integration of integrations) {
-    const pull = integrationPulls[integration.type];
-    if (!pull) {
-      refreshes.push({ id: integration.id, status: "unsupported" });
-      continue;
-    }
-    try {
-      await pull(integration, context);
-      refreshes.push({ id: integration.id, status: "refreshed" });
-    } catch (error) {
-      refreshes.push({
-        id: integration.id,
-        status: "failed",
-        message: error instanceof Error ? error.message : "Pull failed",
-      });
+  for (const card of cards) {
+    for (const query of card.queries) {
+      const integration = integrations.find(
+        ({ id }) => id === query.integration,
+      );
+      if (!integration) {
+        refreshes.push({
+          cardId: card.id,
+          status: "failed",
+          message: `Unknown integration: ${query.integration}`,
+        });
+        continue;
+      }
+
+      const pull = integrationPulls[integration.type];
+      if (!pull) {
+        refreshes.push({ cardId: card.id, status: "unsupported" });
+        continue;
+      }
+
+      try {
+        const source = await pull(integration, query.query, context);
+        const patch = compileFormatterSpec(query.formatter)(source);
+        await context.service.apply(
+          [{ type: "patch-card-state", cardId: card.id, patch }],
+          context.credential,
+        );
+        refreshes.push({ cardId: card.id, status: "refreshed" });
+      } catch (error) {
+        refreshes.push({
+          cardId: card.id,
+          status: "failed",
+          message: error instanceof Error ? error.message : "Pull failed",
+        });
+      }
     }
   }
 
