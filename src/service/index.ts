@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type { AuthStore } from "../auth";
 import {
   defaultDashboardConfiguration,
+  mutationRequirements,
   mutationsSchema,
   parseDashboardConfiguration,
   type Card,
@@ -198,7 +199,8 @@ async function applyMutations(
   const role = await resolveRole(dependencies, configuration, credential);
 
   for (const mutation of mutations) {
-    requireLevel(role, mutation.permission, requiredLevel(mutation));
+    const { category, level } = mutationRequirements[mutation.type];
+    requireLevel(role, category, level);
 
     // Removing a placed card rewrites the dashboard holding it, which is a
     // presentation write however it was reached.
@@ -238,24 +240,6 @@ function requireLevel(
   if (permissionRank[role.permissions[category]] < permissionRank[level]) {
     throw new Error(`Permission denied: ${category}: ${level}`);
   }
-}
-
-/**
- * `edit` changes something that already exists; `write` also creates and
- * destroys. Every mutation not listed here needs `write`.
- */
-const editLevelMutations = new Set<Mutation["type"]>([
-  "patch-card-state",
-  "edit-card",
-  "edit-dashboard",
-  "edit-theme",
-  "edit-integration",
-  "set-font-scale",
-  "insert-card",
-]);
-
-function requiredLevel(mutation: Mutation): PermissionLevel {
-  return editLevelMutations.has(mutation.type) ? "edit" : "write";
 }
 
 function applyMutation(

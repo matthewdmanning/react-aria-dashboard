@@ -57,7 +57,6 @@ describe("dashboard service HTTP transport", () => {
         body: JSON.stringify([
           {
             type: "set-font-scale",
-            permission: "presentation",
             fontScale: 1.25,
           },
         ]),

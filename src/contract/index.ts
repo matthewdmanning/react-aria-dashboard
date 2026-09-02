@@ -43,8 +43,7 @@ export const roleSchema = z
 
 export type Role = z.infer<typeof roleSchema>;
 
-const credentialKey =
-  /credential|password|secret|token|api.?key|access.?key/i;
+const credentialKey = /credential|password|secret|token|api.?key|access.?key/i;
 
 export const integrationSchema = z
   .object({
@@ -163,7 +162,6 @@ export type DashboardConfiguration = z.infer<
 const cardStateMutationSchema = z
   .object({
     type: z.literal("patch-card-state"),
-    permission: z.literal("data"),
     cardId: z.string().min(1),
     patch: z.unknown(),
   })
@@ -172,7 +170,6 @@ const cardStateMutationSchema = z
 const addCardMutationSchema = z
   .object({
     type: z.literal("add-card"),
-    permission: z.literal("cards"),
     card: cardSchema,
   })
   .strict();
@@ -180,7 +177,6 @@ const addCardMutationSchema = z
 const editCardMutationSchema = z
   .object({
     type: z.literal("edit-card"),
-    permission: z.literal("cards"),
     card: cardSchema,
   })
   .strict();
@@ -188,7 +184,6 @@ const editCardMutationSchema = z
 const removeCardMutationSchema = z
   .object({
     type: z.literal("remove-card"),
-    permission: z.literal("cards"),
     cardId: z.string().min(1),
   })
   .strict();
@@ -196,7 +191,6 @@ const removeCardMutationSchema = z
 const insertCardMutationSchema = z
   .object({
     type: z.literal("insert-card"),
-    permission: z.literal("presentation"),
     dashboardId: z.string().min(1),
     cardId: z.string().min(1),
     index: z.number().int().nonnegative().optional(),
@@ -206,7 +200,6 @@ const insertCardMutationSchema = z
 const editDashboardMutationSchema = z
   .object({
     type: z.literal("edit-dashboard"),
-    permission: z.literal("presentation"),
     dashboard: dashboardSchema,
   })
   .strict();
@@ -214,7 +207,6 @@ const editDashboardMutationSchema = z
 const addThemeMutationSchema = z
   .object({
     type: z.literal("add-theme"),
-    permission: z.literal("presentation"),
     theme: themeSchema,
   })
   .strict();
@@ -222,7 +214,6 @@ const addThemeMutationSchema = z
 const editThemeMutationSchema = z
   .object({
     type: z.literal("edit-theme"),
-    permission: z.literal("presentation"),
     theme: themeSchema,
   })
   .strict();
@@ -230,7 +221,6 @@ const editThemeMutationSchema = z
 const setFontScaleMutationSchema = z
   .object({
     type: z.literal("set-font-scale"),
-    permission: z.literal("presentation"),
     fontScale: z.number().min(0.75).max(2),
   })
   .strict();
@@ -238,7 +228,6 @@ const setFontScaleMutationSchema = z
 const addIntegrationMutationSchema = z
   .object({
     type: z.literal("add-integration"),
-    permission: z.literal("integrations"),
     integration: integrationSchema,
   })
   .strict();
@@ -246,7 +235,6 @@ const addIntegrationMutationSchema = z
 const editIntegrationMutationSchema = z
   .object({
     type: z.literal("edit-integration"),
-    permission: z.literal("integrations"),
     integration: integrationSchema,
   })
   .strict();
@@ -254,7 +242,6 @@ const editIntegrationMutationSchema = z
 const removeIntegrationMutationSchema = z
   .object({
     type: z.literal("remove-integration"),
-    permission: z.literal("integrations"),
     integrationId: z.string().min(1),
   })
   .strict();
@@ -262,7 +249,6 @@ const removeIntegrationMutationSchema = z
 const removeThemeMutationSchema = z
   .object({
     type: z.literal("remove-theme"),
-    permission: z.literal("presentation"),
     themeId: z.string().min(1),
   })
   .strict();
@@ -285,6 +271,33 @@ export const mutationSchema = z.discriminatedUnion("type", [
 
 export type Mutation = z.infer<typeof mutationSchema>;
 export const mutationsSchema = z.array(mutationSchema).min(1);
+
+export interface MutationRequirement {
+  category: PermissionCategory;
+  level: PermissionLevel;
+}
+
+/**
+ * What each mutation type requires. Both facts belong to the type rather than
+ * to an instance, so a caller states only its payload and `service` enforces
+ * with one lookup. `edit` changes something that already exists; `write` also
+ * creates and destroys.
+ */
+export const mutationRequirements = {
+  "patch-card-state": { category: "data", level: "edit" },
+  "add-card": { category: "cards", level: "write" },
+  "edit-card": { category: "cards", level: "edit" },
+  "remove-card": { category: "cards", level: "write" },
+  "insert-card": { category: "presentation", level: "edit" },
+  "edit-dashboard": { category: "presentation", level: "edit" },
+  "add-theme": { category: "presentation", level: "write" },
+  "edit-theme": { category: "presentation", level: "edit" },
+  "remove-theme": { category: "presentation", level: "write" },
+  "set-font-scale": { category: "presentation", level: "edit" },
+  "add-integration": { category: "integrations", level: "write" },
+  "edit-integration": { category: "integrations", level: "edit" },
+  "remove-integration": { category: "integrations", level: "write" },
+} as const satisfies Record<Mutation["type"], MutationRequirement>;
 
 export const defaultDashboardConfiguration: DashboardConfiguration = {
   integrations: [],

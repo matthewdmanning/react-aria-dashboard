@@ -66,8 +66,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       description: "Add a new card.",
       inputSchema: z.object({ card: cardSchema }),
     },
-    async ({ card }) =>
-      apply({ type: "add-card", permission: "cards", card }, "Card added"),
+    async ({ card }) => apply({ type: "add-card", card }, "Card added"),
   );
   server.registerTool(
     "edit-card",
@@ -75,8 +74,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       description: "Replace an existing card.",
       inputSchema: z.object({ card: cardSchema }),
     },
-    async ({ card }) =>
-      apply({ type: "edit-card", permission: "cards", card }, "Card edited"),
+    async ({ card }) => apply({ type: "edit-card", card }, "Card edited"),
   );
   server.registerTool(
     "remove-card",
@@ -85,10 +83,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ cardId: z.string() }),
     },
     async ({ cardId }) =>
-      apply(
-        { type: "remove-card", permission: "cards", cardId },
-        "Card removed",
-      ),
+      apply({ type: "remove-card", cardId }, "Card removed"),
   );
 
   server.registerTool(
@@ -101,10 +96,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       }),
     },
     async ({ cardId, patch }) =>
-      apply(
-        { type: "patch-card-state", permission: "data", cardId, patch },
-        "Card state updated",
-      ),
+      apply({ type: "patch-card-state", cardId, patch }, "Card state updated"),
   );
 
   server.registerTool(
@@ -122,7 +114,6 @@ export function createDashboardMcpServer(service: DashboardService) {
         await service.apply([
           {
             type: "insert-card",
-            permission: "presentation",
             dashboardId: dashboard.id,
             cardId,
             index,
@@ -139,10 +130,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ dashboard: dashboardSchema }),
     },
     async ({ dashboard }) =>
-      apply(
-        { type: "edit-dashboard", permission: "presentation", dashboard },
-        "Dashboard updated",
-      ),
+      apply({ type: "edit-dashboard", dashboard }, "Dashboard updated"),
   );
 
   server.registerTool(
@@ -151,11 +139,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       description: "Add a theme.",
       inputSchema: z.object({ theme: themeSchema }),
     },
-    async ({ theme }) =>
-      apply(
-        { type: "add-theme", permission: "presentation", theme },
-        "Theme added",
-      ),
+    async ({ theme }) => apply({ type: "add-theme", theme }, "Theme added"),
   );
 
   server.registerTool(
@@ -164,11 +148,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       description: "Replace an existing theme.",
       inputSchema: z.object({ theme: themeSchema }),
     },
-    async ({ theme }) =>
-      apply(
-        { type: "edit-theme", permission: "presentation", theme },
-        "Theme edited",
-      ),
+    async ({ theme }) => apply({ type: "edit-theme", theme }, "Theme edited"),
   );
 
   server.registerTool(
@@ -178,10 +158,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ themeId: z.string() }),
     },
     async ({ themeId }) =>
-      apply(
-        { type: "remove-theme", permission: "presentation", themeId },
-        "Theme removed",
-      ),
+      apply({ type: "remove-theme", themeId }, "Theme removed"),
   );
 
   server.registerTool(
@@ -191,10 +168,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ fontScale: z.number().min(0.75).max(2) }),
     },
     async ({ fontScale }) =>
-      apply(
-        { type: "set-font-scale", permission: "presentation", fontScale },
-        "Font scale updated",
-      ),
+      apply({ type: "set-font-scale", fontScale }, "Font scale updated"),
   );
 
   server.registerTool(
@@ -204,10 +178,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ integration: integrationSchema }),
     },
     async ({ integration }) =>
-      apply(
-        { type: "add-integration", permission: "integrations", integration },
-        "Integration added",
-      ),
+      apply({ type: "add-integration", integration }, "Integration added"),
   );
 
   server.registerTool(
@@ -217,10 +188,7 @@ export function createDashboardMcpServer(service: DashboardService) {
       inputSchema: z.object({ integration: integrationSchema }),
     },
     async ({ integration }) =>
-      apply(
-        { type: "edit-integration", permission: "integrations", integration },
-        "Integration edited",
-      ),
+      apply({ type: "edit-integration", integration }, "Integration edited"),
   );
 
   server.registerTool(
@@ -233,7 +201,6 @@ export function createDashboardMcpServer(service: DashboardService) {
       apply(
         {
           type: "remove-integration",
-          permission: "integrations",
           integrationId,
         },
         "Integration removed",

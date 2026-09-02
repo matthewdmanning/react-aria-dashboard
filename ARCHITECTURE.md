@@ -77,7 +77,7 @@ Mutations change cards, the dashboard, themes, and integrations. They never chan
 
 Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to the role named `local`. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 
-`edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. Every mutation carries its category and is checked against the caller's bundle at the level its type requires.
+`edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. A mutation's category and required level both follow from its type, so a caller states only its payload and one lookup decides what the caller's bundle must hold.
 
 `read(scope)` returns one category, or `all` for every category the caller may read — denied categories are omitted rather than failing the whole call, so a role short of one category still loads a dashboard. A consumer of `all` therefore holds a partial configuration, and must tell an omitted category from an empty one rather than filling the gap.
 
