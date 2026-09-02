@@ -8,7 +8,7 @@ import {
   themeSchema,
   type Mutation,
 } from "../contract";
-import type { DashboardService } from "../service";
+import { ServiceFailure, type DashboardService } from "../service";
 
 const readScopeSchema = z.enum([
   "all",
@@ -20,19 +20,32 @@ const readScopeSchema = z.enum([
   "roles",
 ]);
 
-function result(text: string, isError = false) {
-  return { content: [{ type: "text" as const, text }], isError };
+function result(
+  text: string,
+  isError = false,
+  structuredContent?: Record<string, unknown>,
+) {
+  return {
+    content: [{ type: "text" as const, text }],
+    isError,
+    ...(structuredContent ? { structuredContent } : {}),
+  };
 }
 
 /**
  * Service failures — denied permissions, unknown ids, refused removals — are
  * answers the caller can act on, so they come back as tool results rather than
- * protocol errors.
+ * protocol errors. Per D14, the service's own name for the failure travels
+ * with the result as `structuredContent.code`, so a caller can act on the
+ * code rather than matching on the message text.
  */
 async function reply(operation: () => Promise<string>) {
   try {
     return result(await operation());
   } catch (error) {
+    if (error instanceof ServiceFailure) {
+      return result(error.message, true, { code: error.code });
+    }
     return result(error instanceof Error ? error.message : String(error), true);
   }
 }
