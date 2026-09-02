@@ -1,8 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-import { parseDashboardConfiguration } from "../../dashboard";
-import { readDashboardConfiguration } from "../dashboard-store";
+import type { Integration } from "../../contract";
 
 export type GoogleCalendarTokenProvider = () => Promise<string>;
 export type FetchCalendar = (
@@ -11,18 +10,18 @@ export type FetchCalendar = (
 ) => Promise<Response>;
 
 export interface GoogleCalendarPullOptions {
-  configurationPath: string;
+  integrations: Integration[];
   dataPath: string;
   tokenProvider: GoogleCalendarTokenProvider;
   fetch?: FetchCalendar;
   integrationId?: string;
 }
 
-function calendarIdFromConfiguration(
-  configuration: ReturnType<typeof parseDashboardConfiguration>,
+function calendarIdFromIntegrations(
+  integrations: Integration[],
   integrationId?: string,
 ) {
-  const integration = configuration.integrations.find(
+  const integration = integrations.find(
     (candidate) =>
       candidate.type === "google-calendar" &&
       (integrationId === undefined || candidate.id === integrationId),
@@ -58,14 +57,13 @@ export async function readGoogleCalendarSource(
 }
 
 export async function pullGoogleCalendar({
-  configurationPath,
+  integrations,
   dataPath,
   tokenProvider,
   fetch: fetchCalendar = globalThis.fetch,
   integrationId,
 }: GoogleCalendarPullOptions): Promise<unknown> {
-  const configuration = await readDashboardConfiguration(configurationPath);
-  const calendarId = calendarIdFromConfiguration(configuration, integrationId);
+  const calendarId = calendarIdFromIntegrations(integrations, integrationId);
   const token = await tokenProvider();
   const response = await fetchCalendar(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,

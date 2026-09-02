@@ -1,29 +1,41 @@
+import * as z from "zod/v4";
+
 import {
   parseDashboardConfiguration,
+  roleSchema,
   type DashboardConfiguration,
-} from "../dashboard";
+  type Mutation,
+  type Role,
+} from "../contract";
 
 const endpoint = "/api/dashboard-configuration";
 
+async function read(scope: string) {
+  const response = await fetch(`${endpoint}?scope=${scope}`);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
 export async function loadDashboardConfiguration(): Promise<DashboardConfiguration> {
-  const response = await fetch(endpoint);
-  if (!response.ok) throw new Error("Could not load dashboard configuration");
-  return parseDashboardConfiguration(await response.json());
+  const payload = await read("all");
+  return parseDashboardConfiguration({ roles: [], ...payload });
 }
 
-export async function saveDashboardConfiguration(
-  configuration: DashboardConfiguration,
-): Promise<void> {
+export async function loadDashboardRoles(): Promise<Role[] | undefined> {
+  const response = await fetch(`${endpoint}?scope=roles`);
+  if (response.status === 403) return undefined;
+  if (!response.ok) throw new Error(await response.text());
+  return z.array(roleSchema).parse(await response.json());
+}
+
+export async function applyDashboardMutations(
+  mutations: readonly Mutation[],
+): Promise<DashboardConfiguration> {
   const response = await fetch(endpoint, {
-    method: "PUT",
+    method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(configuration),
+    body: JSON.stringify(mutations),
   });
-  if (!response.ok) throw new Error("Could not save dashboard configuration");
-}
-
-export async function loadSources(): Promise<Record<string, unknown>> {
-  const response = await fetch("/api/sources");
-  if (!response.ok) throw new Error("Could not load dashboard sources");
-  return (await response.json()) as Record<string, unknown>;
+  if (!response.ok) throw new Error(await response.text());
+  return parseDashboardConfiguration(await response.json());
 }

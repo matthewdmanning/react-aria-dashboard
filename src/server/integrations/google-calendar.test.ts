@@ -3,17 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
-import { defaultDashboardConfiguration } from "../../dashboard";
-import { replaceDashboardConfiguration } from "../dashboard-store";
 import { formatGoogleCalendar } from "../../client/formatters/google-calendar";
 import { pullGoogleCalendar } from "./google-calendar";
 
 async function calendarFiles() {
   const directory = await mkdtemp(join(tmpdir(), "google-calendar-"));
-  const configurationPath = join(directory, "dashboard.json");
   const dataPath = join(directory, "calendar.json");
-  await replaceDashboardConfiguration(configurationPath, {
-    ...defaultDashboardConfiguration,
+  return {
+    dataPath,
     integrations: [
       {
         id: "work-calendar",
@@ -21,8 +18,7 @@ async function calendarFiles() {
         settings: { calendarId: "team@example.com" },
       },
     ],
-  });
-  return { configurationPath, dataPath };
+  };
 }
 
 describe("Google Calendar integration contract", () => {

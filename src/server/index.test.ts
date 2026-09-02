@@ -1,128 +1,116 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { defaultDashboardConfiguration } from "../dashboard";
+import { defaultDashboardConfiguration } from "../contract";
+import {
+  createService,
+  type DashboardPersistence,
+  type DashboardService,
+} from "../service";
 import {
   handleDashboardConfigurationRequest,
   handleGoogleCalendarRequest,
-  handleSourcesRequest,
 } from "./index";
 
-describe("Settings configuration API contract", () => {
-  test("saves and reloads configuration through the HTTP interface", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "settings-api-"));
-    const path = join(directory, "dashboard.json");
-    const changed = { ...defaultDashboardConfiguration, theme: "contrast" };
+function createMemoryPersistence(
+  initial = defaultDashboardConfiguration,
+): DashboardPersistence {
+  let configuration = structuredClone(initial);
+  return {
+    read: async () => structuredClone(configuration),
+    write: async (next) => {
+      configuration = structuredClone(next);
+    },
+  };
+}
 
-    const saved = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify(changed),
-      }),
-      path,
-    );
-    const loaded = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration"),
-      path,
+function createTestService(
+  initial = defaultDashboardConfiguration,
+): DashboardService {
+  return createService({ persistence: createMemoryPersistence(initial) });
+}
+
+describe("dashboard service HTTP transport", () => {
+  test("reads the requested scope through the service", async () => {
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration?scope=all"),
+      createTestService(),
     );
 
-    expect(saved.status).toBe(204);
-    await expect(loaded.json()).resolves.toEqual(changed);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      cards: defaultDashboardConfiguration.cards,
+      dashboard: defaultDashboardConfiguration.dashboard,
+      themes: defaultDashboardConfiguration.themes,
+      fontScale: defaultDashboardConfiguration.fontScale,
+      integrations: defaultDashboardConfiguration.integrations,
+    });
   });
 
-  test("loads retained data and refreshes through the explicit pull endpoint", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "calendar-api-"));
-    const configurationPath = join(directory, "dashboard.json");
-    const dataPath = join(directory, "google-calendar.json");
-    await handleDashboardConfigurationRequest(
+  test("applies mutation lists through the service", async () => {
+    const service = createTestService();
+    const response = await handleDashboardConfigurationRequest(
       new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...defaultDashboardConfiguration,
-          integrations: [
-            {
-              id: "calendar",
-              type: "google-calendar",
-              settings: { calendarId: "team" },
-            },
-          ],
-        }),
+        method: "POST",
+        body: JSON.stringify([
+          {
+            type: "set-font-scale",
+            permission: "presentation",
+            fontScale: 1.25,
+          },
+        ]),
       }),
-      configurationPath,
+      service,
     );
-    const source = { items: [{ id: "event-1", summary: "Planning" }] };
 
-    const refreshed = await handleGoogleCalendarRequest(
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ fontScale: 1.25 });
+  });
+
+  test("returns service permission errors without a second authorization check", async () => {
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration?scope=roles"),
+      createTestService(),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.toContain("roles: read");
+  });
+});
+
+describe("Google Calendar endpoint", () => {
+  test("refreshes using integrations read through the service", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "calendar-api-"));
+    const dataPath = join(directory, "calendar.json");
+    const source = { items: [{ id: "event-1", summary: "Planning" }] };
+    const fetchCalendar = vi.fn(async () => Response.json(source));
+    const service = createTestService({
+      ...defaultDashboardConfiguration,
+      integrations: [
+        {
+          id: "calendar",
+          type: "google-calendar",
+          settings: { calendarId: "team" },
+        },
+      ],
+    });
+
+    const response = await handleGoogleCalendarRequest(
       new Request("http://dashboard/api/google-calendar", { method: "POST" }),
-      configurationPath,
       dataPath,
       {
+        service,
         tokenProvider: async () => "access-token",
-        fetch: async (url, init) => {
-          expect(url).toContain("team");
-          expect(init?.headers).toEqual({
-            Authorization: "Bearer access-token",
-          });
-          return Response.json(source);
-        },
+        fetch: fetchCalendar,
       },
     );
 
-    expect(refreshed.status).toBe(200);
-    await expect(refreshed.json()).resolves.toEqual(source);
-    expect(JSON.parse(await readFile(dataPath, "utf8"))).toEqual(source);
-    await expect(
-      handleGoogleCalendarRequest(
-        new Request("http://dashboard/api/google-calendar"),
-        configurationPath,
-        dataPath,
-        { tokenProvider: async () => "unused" },
-      ).then((response) => response.json()),
-    ).resolves.toEqual(source);
-  });
-
-  test("serves every wired source it can find, skipping missing files", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "sources-api-"));
-    const configurationPath = join(directory, "dashboard.json");
-    const dataPath = join(directory, "data");
-    await mkdir(dataPath, { recursive: true });
-    await writeFile(
-      join(dataPath, "welcome.json"),
-      JSON.stringify({ text: "Ready" }),
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(source);
+    await expect(readFile(dataPath, "utf8")).resolves.toContain(
+      '"summary": "Planning"',
     );
-    await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...defaultDashboardConfiguration,
-          cards: [
-            { id: "welcome", title: "Dashboard", template: "message" },
-            { id: "missing", title: "Missing", template: "message" },
-          ],
-          wiring: [
-            { cardId: "welcome", source: "welcome", formatter: "message" },
-            {
-              cardId: "missing",
-              source: "no-such-source",
-              formatter: "identity",
-            },
-          ],
-          arrangement: ["welcome", "missing"],
-        }),
-      }),
-      configurationPath,
-    );
-
-    const response = await handleSourcesRequest(
-      new Request("http://dashboard/api/sources"),
-      configurationPath,
-      dataPath,
-    );
-
-    await expect(response.json()).resolves.toEqual({
-      welcome: { text: "Ready" },
-    });
   });
 });
