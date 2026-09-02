@@ -302,6 +302,11 @@ async function applyMutations(
   // (D16) — there is no "disconnect without removing" action to hang a
   // separate revoke on, and it fires here so every caller of `apply` gets
   // it, not just the ones that happen to go through one adapter.
+  //
+  // ponytail: after the write, so a failed revoke orphans the secret of an
+  // integration that is already gone. Re-authorizing then removing it again
+  // clears it. Make the pair atomic if a credential store ever fails often
+  // enough to matter.
   if (dependencies.credentials) {
     const removed = mutations.filter(
       (
@@ -328,6 +333,13 @@ async function authorizeConnection(
   const configuration = await readConfiguration(dependencies.persistence);
   const role = await resolveRole(dependencies, configuration, credential);
   requireLevel(role, "integrations", "edit");
+
+  if (!configuration.integrations.some(({ id }) => id === connectionId)) {
+    throw new ServiceFailure(
+      "unknown-id",
+      `Unknown integration: ${connectionId}`,
+    );
+  }
 
   if (!dependencies.credentials) {
     throw new ServiceFailure(

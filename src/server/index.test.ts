@@ -149,7 +149,15 @@ describe("integration refresh endpoint", () => {
   };
 
   test("runs every card's queries through the service and patches card state", async () => {
-    const source = { items: [{ id: "event-1", summary: "Planning", start: { dateTime: "2026-08-27T09:00:00-04:00" } }] };
+    const source = {
+      items: [
+        {
+          id: "event-1",
+          summary: "Planning",
+          start: { dateTime: "2026-08-27T09:00:00-04:00" },
+        },
+      ],
+    };
     const pull = vi.fn(async () => Response.json(source));
     const service = createTestService({
       ...defaultDashboardConfiguration,
@@ -199,7 +207,11 @@ describe("integration refresh endpoint", () => {
     expect(cards.find(({ id }) => id === "calendar-card")).toMatchObject({
       state: {
         events: [
-          { id: "event-1", title: "Planning", start: "2026-08-27T09:00:00-04:00" },
+          {
+            id: "event-1",
+            title: "Planning",
+            start: "2026-08-27T09:00:00-04:00",
+          },
         ],
       },
     });
@@ -299,9 +311,17 @@ describe("integration types endpoint", () => {
 describe("integration authorization endpoint", () => {
   test("stores a connection's credential through the one enforcement point", async () => {
     const credentials = createMemoryCredentialStore();
-    const service = createTestService(defaultDashboardConfiguration, {
-      credentials,
-    });
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      },
+      {
+        credentials,
+      },
+    );
 
     const response = await handleIntegrationAuthorizeRequest(
       new Request("http://dashboard/api/integrations/authorize", {

@@ -55,7 +55,8 @@ function createTestService(
  */
 async function connectClient(service: DashboardService): Promise<Client> {
   const server = createDashboardMcpServer(service);
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "0.0.0" });
   await Promise.all([
     server.connect(serverTransport),
@@ -188,7 +189,15 @@ describe("integration authorization through MCP", () => {
   test("authorizes a connection through the same enforcement point as the HTTP adapter", async () => {
     const credentials = createMemoryCredentialStore();
     const client = await connectClient(
-      createTestService(defaultDashboardConfiguration, { credentials }),
+      createTestService(
+        {
+          ...defaultDashboardConfiguration,
+          integrations: [
+            { id: "team-calendar", type: "google-calendar", settings: {} },
+          ],
+        },
+        { credentials },
+      ),
     );
 
     const result = await client.callTool({

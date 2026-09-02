@@ -356,7 +356,12 @@ describe("integration authorization", () => {
   test("stores a connection's credential, gated at integrations: edit", async () => {
     const credentials = createMemoryCredentialStore();
     const service = createService({
-      persistence: createMemoryPersistence(),
+      persistence: createMemoryPersistence({
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      }),
       credentials,
     });
 
@@ -365,6 +370,19 @@ describe("integration authorization", () => {
     await expect(credentials.get("team-calendar")).resolves.toBe(
       "secret-token",
     );
+  });
+
+  test("refuses to store a credential for an integration that does not exist", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createService({
+      persistence: createMemoryPersistence(),
+      credentials,
+    });
+
+    await expect(service.authorize("invented", "secret-token")).rejects.toThrow(
+      "Unknown integration: invented",
+    );
+    await expect(credentials.get("invented")).resolves.toBeUndefined();
   });
 
   test("refuses a caller without integrations: edit", async () => {
