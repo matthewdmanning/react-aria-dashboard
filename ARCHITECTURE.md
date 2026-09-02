@@ -14,7 +14,7 @@ The dashboard is not one fixed object or universal data model. Its structure, da
 - React Aria Components provides accessible interaction behavior for complex controls.
 - Native HTML and CSS are used where they are sufficient.
 - CSS custom properties support the declarative theme system.
-- A small Node.js backend provides atomic JSON persistence, Google integrations, external-access authentication, and MCP tools.
+- A small Node.js backend provides atomic JSON persistence, external-service integrations, external-access authentication, and MCP tools.
 - There is no database.
 
 ## Module map
@@ -44,10 +44,10 @@ The module map above is the target cut. The rewrite lands issue by issue, so par
 | `auth`           | Written, at `src/auth/`                               |
 | `mcp`            | Rewritten onto `service`, at `src/mcp/`; untested     |
 | `integrations`   | Not split out; lives under `src/server/integrations/` |
-| `view`           | Not renamed; lives at `src/client/`                   |
+| `view`           | Not renamed; lives at `src/client/`; on `service`     |
 | `card-templates` | Not split out; components live at `src/client/cards/` |
 
-`src/dashboard/` is superseded. It still defines a configuration schema carrying `version`, `wiring`, `arrangement`, and `agentPermissions`, and most of `src/` still imports it. That schema is dead — `contract` replaces it. Do not extend it, and do not read it as a description of the target.
+`src/dashboard/` is superseded and now orphaned: nothing outside it imports it, and only its own test still runs against it. It defines a configuration schema carrying `version`, `wiring`, `arrangement`, and `agentPermissions`, which `contract` replaces. Delete it rather than extending it, and do not read it as a description of the target.
 
 Delete this section when the last module lands.
 
@@ -81,6 +81,8 @@ Every request resolves to an account, then a role, then permissions, at one enfo
 
 `edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. Every mutation carries its category and is checked against the caller's bundle at the level its type requires.
 
-`read(scope)` returns one category, or `all` for every category the caller may read — denied categories are omitted rather than failing the whole call, so a role short of one category still loads a dashboard.
+`read(scope)` returns one category, or `all` for every category the caller may read — denied categories are omitted rather than failing the whole call, so a role short of one category still loads a dashboard. A consumer of `all` therefore holds a partial configuration, and must tell an omitted category from an empty one rather than filling the gap.
+
+The client reaches the service over one endpoint pair, one operation each. There is no endpoint per action: every client action is a mutation, so a new action needs no new route and no second permission check.
 
 Mutations in `integrations` require a live service. Every other mutation queues offline and replays on reconnect. `roles` has no mutations to queue.

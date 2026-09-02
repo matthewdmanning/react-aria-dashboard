@@ -83,3 +83,5 @@ A caller arriving with no credential resolves to the role named `local`.
 ## Settings
 
 The interface through which a user directly manages integrations, themes, and font scaling without involving an agent. Roles are not edited here — they are a source change.
+
+Settings is a human screen. Managing an integration here means connecting or disconnecting it — granting and revoking this dashboard's authorization to use a service. What a card draws from that service is its query, not a setting on the connection.
