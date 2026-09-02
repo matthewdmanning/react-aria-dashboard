@@ -221,5 +221,22 @@ export function createDashboardMcpServer(service: DashboardService) {
       ),
   );
 
+  server.registerTool(
+    "authorize-integration",
+    {
+      description:
+        "Hand off an already-obtained credential (an access token, an API key) to authorize an existing integration.",
+      inputSchema: z.object({
+        integrationId: z.string(),
+        credential: z.string(),
+      }),
+    },
+    async ({ integrationId, credential }) =>
+      reply(async () => {
+        await service.authorize(integrationId, credential);
+        return "Integration authorized";
+      }),
+  );
+
   return server;
 }

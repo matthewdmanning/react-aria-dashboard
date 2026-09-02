@@ -6,9 +6,12 @@ import {
   type DashboardPersistence,
   type DashboardService,
 } from "../service";
+import type { CredentialStore } from "./integrations/credentials";
 import {
   handleDashboardConfigurationRequest,
+  handleIntegrationAuthorizeRequest,
   handleIntegrationRefreshRequest,
+  handleIntegrationTypesRequest,
 } from "./index";
 
 function createMemoryPersistence(
@@ -23,10 +26,27 @@ function createMemoryPersistence(
   };
 }
 
+function createMemoryCredentialStore(): CredentialStore {
+  const values = new Map<string, string>();
+  return {
+    get: async (id) => values.get(id),
+    set: async (id, credential) => {
+      values.set(id, credential);
+    },
+    remove: async (id) => {
+      values.delete(id);
+    },
+  };
+}
+
 function createTestService(
   initial = defaultDashboardConfiguration,
+  extra: { credentials?: CredentialStore; connectableTypes?: string[] } = {},
 ): DashboardService {
-  return createService({ persistence: createMemoryPersistence(initial) });
+  return createService({
+    persistence: createMemoryPersistence(initial),
+    ...extra,
+  });
 }
 
 describe("dashboard service HTTP transport", () => {
@@ -226,5 +246,159 @@ describe("integration refresh endpoint", () => {
         message: "Credentials are not configured",
       },
     ]);
+  });
+});
+
+describe("integration types endpoint", () => {
+  test("lists the services this build can pull from", async () => {
+    const service = createTestService(defaultDashboardConfiguration, {
+      connectableTypes: ["google-calendar"],
+    });
+
+    const response = await handleIntegrationTypesRequest(
+      new Request("http://dashboard/api/integrations/types"),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(["google-calendar"]);
+  });
+
+  test("resolves a role like every other request, refusing a caller with no integrations access", async () => {
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        roles: [
+          {
+            name: "local",
+            permissions: {
+              data: "write",
+              cards: "write",
+              presentation: "write",
+              integrations: "none",
+              roles: "none",
+            },
+          },
+        ],
+      },
+      { connectableTypes: ["google-calendar"] },
+    );
+
+    const response = await handleIntegrationTypesRequest(
+      new Request("http://dashboard/api/integrations/types"),
+      service,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
+    });
+  });
+});
+
+describe("integration authorization endpoint", () => {
+  test("stores a connection's credential through the one enforcement point", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createTestService(defaultDashboardConfiguration, {
+      credentials,
+    });
+
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({
+          integrationId: "team-calendar",
+          credential: "secret-token",
+        }),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(credentials.get("team-calendar")).resolves.toBe(
+      "secret-token",
+    );
+  });
+
+  test("refuses a caller without integrations: edit", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        roles: [
+          {
+            name: "local",
+            permissions: {
+              data: "write",
+              cards: "write",
+              presentation: "write",
+              integrations: "read",
+              roles: "none",
+            },
+          },
+        ],
+      },
+      { credentials },
+    );
+
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({
+          integrationId: "team-calendar",
+          credential: "secret-token",
+        }),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
+    });
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
+  });
+
+  test("requires both an integrationId and a credential", async () => {
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({ integrationId: "team-calendar" }),
+      }),
+      createTestService(defaultDashboardConfiguration, {
+        credentials: createMemoryCredentialStore(),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("revoking an integration's authorization", () => {
+  test("removing an integration through the dashboard-configuration endpoint drops its stored credential", async () => {
+    const credentials = createMemoryCredentialStore();
+    await credentials.set("team-calendar", "secret-token");
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      },
+      { credentials },
+    );
+
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([
+          { type: "remove-integration", integrationId: "team-calendar" },
+        ]),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
   });
 });

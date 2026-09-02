@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import type { AuthStore } from "../auth";
+import type { CredentialStore } from "../server/integrations/credentials";
 import {
   defaultDashboardConfiguration,
   mutationRequirements,
@@ -30,7 +31,8 @@ export type ServiceFailureCode =
   | "unknown-role"
   | "unknown-id"
   | "duplicate-id"
-  | "in-use";
+  | "in-use"
+  | "credentials-unavailable";
 
 export class ServiceFailure extends Error {
   constructor(
@@ -68,6 +70,10 @@ export type ReadScope = keyof ReadScopes;
 interface Dependencies {
   persistence: DashboardPersistence;
   authStore?: AuthStore;
+  /** Where an integration's authorization secret lives — see `CredentialStore` (D16). */
+  credentials?: CredentialStore;
+  /** The service types this build can pull from — how a caller learns what may be connected. */
+  connectableTypes?: readonly string[];
 }
 
 export interface DashboardService {
@@ -84,6 +90,22 @@ export interface DashboardService {
     mutations: readonly Mutation[],
     credential?: string,
   ): Promise<ReadScopes["all"]>;
+  /**
+   * The authorization handoff for one connection (D16): stores its secret
+   * outside dashboard configuration. Not a mutation — a credential never
+   * enters `DashboardConfiguration` or a read projection (`contract`
+   * already refuses a credential-shaped `integration.settings` key; this
+   * keeps the same promise for the store `apply` never touches). Gated at
+   * `integrations: edit` — the connection already exists via
+   * `add-integration`; authorizing it changes something that exists (D20).
+   */
+  authorize(
+    connectionId: string,
+    connectionCredential: string,
+    credential?: string,
+  ): Promise<void>;
+  /** The services this build can connect to. Gated at `integrations: read`. */
+  connectableTypes(credential?: string): Promise<string[]>;
 }
 
 export function createService(dependencies: Dependencies): DashboardService {
@@ -105,6 +127,17 @@ export function createService(dependencies: Dependencies): DashboardService {
       enqueue(() => readState(dependencies, scope, credential)),
     apply: (mutations, credential) =>
       enqueue(() => applyMutations(dependencies, mutations, credential)),
+    authorize: (connectionId, connectionCredential, credential) =>
+      enqueue(() =>
+        authorizeConnection(
+          dependencies,
+          connectionId,
+          connectionCredential,
+          credential,
+        ),
+      ),
+    connectableTypes: (credential) =>
+      enqueue(() => readConnectableTypes(dependencies, credential)),
   };
 }
 
@@ -264,7 +297,55 @@ async function applyMutations(
   for (const mutation of mutations) applyMutation(candidate, mutation);
   const next = parseDashboardConfiguration(candidate);
   await dependencies.persistence.write(next);
+
+  // Revoking an integration's authorization rides along with removing it
+  // (D16) — there is no "disconnect without removing" action to hang a
+  // separate revoke on, and it fires here so every caller of `apply` gets
+  // it, not just the ones that happen to go through one adapter.
+  if (dependencies.credentials) {
+    const removed = mutations.filter(
+      (
+        mutation,
+      ): mutation is Extract<Mutation, { type: "remove-integration" }> =>
+        mutation.type === "remove-integration",
+    );
+    await Promise.all(
+      removed.map((mutation) =>
+        dependencies.credentials!.remove(mutation.integrationId),
+      ),
+    );
+  }
+
   return projectReadable(next, role, { allowEmpty: true });
+}
+
+async function authorizeConnection(
+  dependencies: Dependencies,
+  connectionId: string,
+  connectionCredential: string,
+  credential: string | undefined,
+): Promise<void> {
+  const configuration = await readConfiguration(dependencies.persistence);
+  const role = await resolveRole(dependencies, configuration, credential);
+  requireLevel(role, "integrations", "edit");
+
+  if (!dependencies.credentials) {
+    throw new ServiceFailure(
+      "credentials-unavailable",
+      "Credential storage is not configured",
+    );
+  }
+  await dependencies.credentials.set(connectionId, connectionCredential);
+}
+
+async function readConnectableTypes(
+  dependencies: Dependencies,
+  credential: string | undefined,
+): Promise<string[]> {
+  const configuration = await readConfiguration(dependencies.persistence);
+  const role = await resolveRole(dependencies, configuration, credential);
+  requireRead(role, "integrations");
+  return [...(dependencies.connectableTypes ?? [])];
 }
 
 function requireRead(role: Role, category: PermissionCategory): void {

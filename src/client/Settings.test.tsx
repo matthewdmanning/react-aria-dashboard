@@ -13,7 +13,9 @@ function render(
     createElement(Settings, {
       dashboard,
       callerRole,
+      connectableTypes: ["example-service"],
       onSave: async () => undefined,
+      onAuthorize: async () => undefined,
     }),
   );
 }
