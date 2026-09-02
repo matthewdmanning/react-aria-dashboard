@@ -8,7 +8,9 @@ import type { Mutation } from "../contract";
 import {
   createFilePersistence,
   createService,
+  ServiceFailure,
   type DashboardService,
+  type ServiceFailureCode,
 } from "../service";
 import type {
   FetchCalendar,
@@ -33,7 +35,10 @@ export async function handleDashboardConfigurationRequest(
     if (request.method === "GET") {
       const scope = new URL(request.url).searchParams.get("scope") ?? "all";
       if (!(readScopes as readonly string[]).includes(scope)) {
-        return new Response("Unknown dashboard scope", { status: 400 });
+            return Response.json(
+          { code: "invalid-request", message: "Unknown dashboard scope" },
+          { status: 400 },
+        );
       }
       return Response.json(
         await readDashboardScope(service, scope as (typeof readScopes)[number], request),
@@ -51,10 +56,36 @@ export async function handleDashboardConfigurationRequest(
 
     return new Response("Method not allowed", { status: 405 });
   } catch (error) {
-    return new Response(error instanceof Error ? error.message : "Invalid request", {
-      status: isAuthorizationError(error) ? 403 : 400,
-    });
+    return failureResponse(error);
   }
+}
+
+/** The service names why a call failed; HTTP is one vocabulary for that. */
+const failureStatus: Record<ServiceFailureCode, number> = {
+  "unknown-credential": 401,
+  "authentication-unavailable": 500,
+  "permission-denied": 403,
+  "unknown-role": 500,
+  "unknown-id": 404,
+  "duplicate-id": 409,
+  "in-use": 409,
+};
+
+function failureResponse(error: unknown): Response {
+  if (error instanceof ServiceFailure) {
+    return Response.json(
+      { code: error.code, message: error.message },
+      { status: failureStatus[error.code] },
+    );
+  }
+  // A malformed request never reached the service.
+  return Response.json(
+    {
+      code: "invalid-request",
+      message: error instanceof Error ? error.message : "Invalid request",
+    },
+    { status: 400 },
+  );
 }
 
 async function readDashboardScope(
@@ -83,18 +114,13 @@ function credentialFromRequest(request: Request): string | undefined {
   const authorization = request.headers.get("authorization");
   if (authorization === null) return undefined;
   const match = /^Bearer\s+(.+)$/i.exec(authorization);
-  if (!match) throw new Error("Invalid authorization header");
+  if (!match) {
+    throw new ServiceFailure(
+      "unknown-credential",
+      "Invalid authorization header",
+    );
+  }
   return match[1];
-}
-
-function isAuthorizationError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (/^(Unknown credential|Authentication is not configured|Permission denied)/.test(
-      error.message,
-    ) ||
-      error.message === "Invalid authorization header")
-  );
 }
 
 export async function handleIntegrationRefreshRequest(
