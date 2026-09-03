@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 import type { AuthStore } from "../auth";
 import type { CredentialStore } from "../server/integrations/credentials";
@@ -297,14 +298,26 @@ async function applyMutations(
     }
   }
 
-  // Real filesystem writes, unlike the in-memory mutations below — fails
-  // before touching tracked source (verified via `tsc`) and before
-  // `persistence.write`, so a bad composition never lands anywhere and the
-  // batch stays atomic.
-  for (const mutation of mutations) {
-    if (mutation.type === "assemble-card-template") {
-      await writeCardTemplateSource(mutation);
+  // Real filesystem writes, unlike the in-memory mutations below. Every
+  // composition in the batch is generated and type-checked into a temp file
+  // first; only once ALL of them pass are any renamed into tracked source —
+  // one invalid tree in a multi-assemble batch must not leave an earlier,
+  // valid one already landed.
+  const assembled: { tempPath: string; finalPath: string }[] = [];
+  try {
+    for (const mutation of mutations) {
+      if (mutation.type === "assemble-card-template") {
+        assembled.push(await checkCardTemplateSource(mutation));
+      }
     }
+    for (const { tempPath, finalPath } of assembled) {
+      await rename(tempPath, finalPath);
+    }
+  } catch (error) {
+    await Promise.all(
+      assembled.map(({ tempPath }) => unlink(tempPath).catch(() => undefined)),
+    );
+    throw error;
   }
 
   const candidate = structuredClone(configuration);
@@ -518,9 +531,9 @@ function applyMutation(
       return;
     }
     case "assemble-card-template":
-      // Already written to src/client/cards/ above, before this loop runs —
-      // nothing left to change on the configuration itself (#76 registers
-      // the template's schema so cards can reference it).
+      // Checked and renamed into src/client/cards/ above, before this loop
+      // runs — nothing left to change on the configuration itself (#76
+      // registers the template's schema so cards can reference it).
       return;
   }
 }
@@ -536,9 +549,42 @@ function toComponentName(template: string): string {
     .join("");
 }
 
-async function writeCardTemplateSource(
+/**
+ * Type-checks one composition's generated source in isolation — a scoped
+ * tsconfig (`extends` the real one, `include` overridden to just this file)
+ * so one bad pre-existing file elsewhere in the tree can't fail an
+ * otherwise-valid composition, and so a full project check doesn't run on
+ * every assemble call.
+ */
+async function typeChecks(temporaryPath: string): Promise<boolean> {
+  const relativePath = temporaryPath
+    .slice(process.cwd().length + 1)
+    .split("\\")
+    .join("/");
+  const scopedConfigPath = join(
+    process.cwd(),
+    `tsconfig.assemble.${randomUUID()}.json`,
+  );
+  await writeFile(
+    scopedConfigPath,
+    JSON.stringify({ extends: "./tsconfig.json", include: [relativePath] }),
+  );
+  try {
+    execFileSync(process.execPath, [tscBin, "--noEmit", "-p", scopedConfigPath], {
+      cwd: process.cwd(),
+      stdio: "pipe",
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await unlink(scopedConfigPath).catch(() => undefined);
+  }
+}
+
+async function checkCardTemplateSource(
   mutation: Extract<Mutation, { type: "assemble-card-template" }>,
-): Promise<void> {
+): Promise<{ tempPath: string; finalPath: string }> {
   const source = generateComponentSource(
     mutation.composition,
     toComponentName(mutation.template),
@@ -546,25 +592,22 @@ async function writeCardTemplateSource(
   await mkdir(cardTemplatesDir, { recursive: true });
   const finalPath = join(cardTemplatesDir, `${mutation.template}.tsx`);
   // A dot-prefixed name would be silently excluded from tsc's default
-  // `include` globbing, defeating the type-check this file exists for.
+  // `include` globbing, defeating the type-check this file exists for. The
+  // uuid keeps concurrent assembles of the same template from colliding on
+  // the same temp file.
   const temporaryPath = join(
     cardTemplatesDir,
-    `__assemble-${mutation.template}.tsx`,
+    `__assemble-${mutation.template}-${randomUUID()}.tsx`,
   );
   await writeFile(temporaryPath, source);
-  try {
-    execFileSync(process.execPath, [tscBin, "--noEmit", "-p", "tsconfig.json"], {
-      cwd: process.cwd(),
-      stdio: "pipe",
-    });
-  } catch {
+  if (!(await typeChecks(temporaryPath))) {
     await unlink(temporaryPath).catch(() => undefined);
     throw new ServiceFailure(
       "invalid-composition",
       `Composition tree for template '${mutation.template}' failed to type-check`,
     );
   }
-  await rename(temporaryPath, finalPath);
+  return { tempPath: temporaryPath, finalPath };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
