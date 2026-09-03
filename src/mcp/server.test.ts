@@ -1,4 +1,6 @@
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { readFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -85,6 +87,7 @@ describe("dashboard MCP server", () => {
         "remove-card",
         "patch-card-state",
         "insert-card",
+        "assemble-card-template",
         "edit-dashboard",
         "add-theme",
         "edit-theme",
@@ -169,6 +172,52 @@ describe("dashboard MCP server", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({
       code: "permission-denied",
+    });
+  });
+
+  test("assembles a card template from a composition tree", async () => {
+    const templatePath = join(
+      process.cwd(),
+      "src",
+      "client",
+      "cards",
+      "__mcp-test-assembled.tsx",
+    );
+    const client = await connectClient(createTestService());
+
+    try {
+      const result = await client.callTool({
+        name: "assemble-card-template",
+        arguments: {
+          template: "__mcp-test-assembled",
+          composition: { component: "Text", props: {}, children: [] },
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const source = await readFile(templatePath, "utf8");
+      expect(source).toContain(
+        'import { Text } from "react-aria-components"',
+      );
+    } finally {
+      await unlink(templatePath).catch(() => undefined);
+    }
+  });
+
+  test("an invalid composition tree surfaces the service's failure code", async () => {
+    const client = await connectClient(createTestService());
+
+    const result = await client.callTool({
+      name: "assemble-card-template",
+      arguments: {
+        template: "__mcp-test-invalid",
+        composition: { component: "NotARealComponent", props: {}, children: [] },
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      code: "invalid-composition",
     });
   });
 

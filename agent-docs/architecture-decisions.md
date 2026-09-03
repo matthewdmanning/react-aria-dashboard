@@ -39,7 +39,7 @@ Consequence: the MCP server cannot run without the service process.
 There is no separate "developer" and "user" concept in the architecture. What distinguishes those two kinds of work is which door the change goes through, not which role holds it:
 
 - changes to dashboard configuration go through the service, governed by a role
-- changes to card templates, built-in formatters, and packages are source changes, reviewed like any other code change, and are not reachable through the service at any permission level
+- changes to card templates, built-in formatters, and packages are source changes, reviewed like any other code change, and are not reachable through the service at any permission level (D22 narrows this: assembling a card template's component from a declarative composition tree is one specific service capability, gated by a permission level like any other mutation — built-in formatters and packages are untouched)
 
 ### D3 — Roles live in dashboard configuration; accounts live in the auth store
 
@@ -243,6 +243,20 @@ The dashboard arrives in the default configuration, and every entrypoint hangs o
 `dashboardConfigurationSchema` holds `dashboard`, one object, not an array. D9's shape is unchanged: a dashboard is a document holding ordered card references plus a theme reference, and a card sits in one pool. The dashboard keeps its `id`, and `insert-card` still names it.
 
 Consequence: `edit-dashboard` is the only dashboard mutation. It reorders card references and changes the theme reference.
+
+### D22 — The service assembles a card template's component from a declarative composition tree, narrowing D2
+
+Decided 2026-09-03.
+
+D2 put card templates on the source-change side of the line: reviewed like any code change, never reachable through the service. This narrows that: the service gains one specific capability, assembling a card template's component source from agent input, gated by a permission level like any other mutation. Card templates are no longer categorically unreachable through the service — this one path exists, and nothing else about D2 changes (roles, built-in formatters, and packages stay untouched by the service).
+
+The input is a declarative composition tree — `{component: string, props: Record<string, unknown>, children: Node[]}` — describing which `react-aria-components` to nest and with what props. The agent never writes code; it sends this tree. The service assembles real source from it: real imports, real JSX, using the component names and props as given.
+
+Correctness comes from the library itself, not a hand-authored parallel schema. An earlier draft of this decision specified per-component prop/children schemas (mirroring `formatterSpecSchema`) — that was wrong and already caught: it duplicates what `react-aria-components`' own TypeScript types assert, and a hand-maintained duplicate drifts from the real types. The assembled file is checked by `tsc --noEmit` (already in `npm run check`) against the library's real types — that is the entire props/children correctness check. The input schema itself stays small and library-agnostic by construction: it describes tree shape, not any one library's vocabulary.
+
+Scope: **static trees only.** A tree of `{component, props, children}` cannot express local state or callbacks — it has no way to represent `useDragAndDrop`/`useListData`-style hooks, or a stepper's `useState`. A card template that needs those (drag-and-drop, the `SteppedListCard` pattern) stays hand-written source, outside this path, reviewed the ordinary way. Drag-and-drop is explicitly out of scope for the assembled path.
+
+One mechanism, not two: whoever's editing a card template's source — hand-written or assembled — is real `react-aria-components` composition either way; a differently-run copy of this codebase is the same source code, not a second system with its own rules.
 
 ---
 

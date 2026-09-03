@@ -56,7 +56,11 @@ A card template is split across two places, and both halves must agree:
 - `contract` holds each template's schema.
 - The card template's component renders data fitting that schema.
 
-Adding a card template is an ordinary source change, reviewed like any other. The service does not expose it at any permission level.
+Adding a card template by hand is an ordinary source change, reviewed like any other.
+
+A card template's component is a declarative composition of `react-aria-components` — a tree of real component exports with props and nested children, not free-form JSX, not raw DOM elements, not invented primitives. The service can also assemble one: given a composition tree (`{component, props, children}`), it generates the component's real source from the library's real exports (D22). This is the one card-template capability the service has; roles, built-in formatters, and packages stay source-only. Correctness comes from `tsc --noEmit` against the library's real types, not a hand-maintained parallel schema — the input tree carries no per-component vocabulary of its own.
+
+Scope: static trees only. A widget needing local state or hooks (`useDragAndDrop`, `useListData`, a stepper's `useState`) can't be expressed as a composition tree and stays hand-written, reviewed the ordinary way. Drag-and-drop is out of scope for the assembled path. One mechanism either way — hand-written or assembled, upstream or in a differently-run copy of this codebase, the composition is the same real library.
 
 ## Rendering path
 
@@ -73,7 +77,7 @@ The formatter runs on the way in, not at render time, so a card is never persist
 
 The service exposes two operations: `read(scope)` returns state, and `apply(mutations)` applies one or more mutations atomically. MCP tools and client actions are both mutation constructors.
 
-Mutations change cards, the dashboard, themes, and integrations. They never change roles, card templates, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level.
+Mutations change cards, the dashboard, themes, and integrations. They never change roles, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level. Card templates are the one exception (D22): the service can assemble one's component from a declarative composition tree, gated by a permission level like any other mutation.
 
 Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to the role named `local`. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 

@@ -3,6 +3,7 @@ import * as z from "zod/v4";
 
 import {
   cardSchema,
+  compositionNodeSchema,
   dashboardSchema,
   integrationSchema,
   themeSchema,
@@ -135,6 +136,23 @@ export function createDashboardMcpServer(service: DashboardService) {
         ]);
         return "Card inserted";
       }),
+  );
+
+  server.registerTool(
+    "assemble-card-template",
+    {
+      description:
+        "Generate a card template's component source from a declarative composition tree of react-aria-components.",
+      inputSchema: z.object({
+        template: z.string().min(1),
+        composition: compositionNodeSchema,
+      }),
+    },
+    async ({ template, composition }) =>
+      apply(
+        { type: "assemble-card-template", template, composition },
+        "Card template assembled",
+      ),
   );
 
   server.registerTool(
