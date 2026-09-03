@@ -1,6 +1,6 @@
 {
   "database": "Omitted; the dataset is too small to need one, and a local JSON file stays directly usable as context for local AI tools.",
-  "card template": "Defined in application source rather than authored through MCP, so the agent-facing surface has no field that can carry UI code.",
+  "card template": "Defined in application source, hand-written or assembled by the service from a declarative composition tree (D22, narrows D2) — the agent never authors component code directly either way. The tree names real react-aria-components exports; correctness comes from tsc against the library's real types, not a hand-maintained parallel schema (an earlier draft tried that and was wrong). Static trees only — a widget needing hooks or local state stays hand-written.",
   "display-role key": "Schema keys name how a value is displayed rather than what it means in a source domain, so a formatter can retarget new source data onto an existing template without new code.",
   "react-aria-components": "Preferred over the react-aria and react-stately hooks. Rebuilding the benchmark card on hooks made it longer, there is no stepper hook, and announce() is not public API. Hooks remain a per-component escape hatch where the wrappers cannot emit the markup needed.",
   "react-aria": "Not declared directly. It and react-stately are exact-pinned transitives of react-aria-components; declaring a different range installs duplicate copies and breaks context identity.",
