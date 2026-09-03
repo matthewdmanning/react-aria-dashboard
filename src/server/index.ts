@@ -74,7 +74,6 @@ const failureStatus: Record<ServiceFailureCode, number> = {
   "in-use": 409,
   "credentials-unavailable": 500,
   "invalid-composition": 422,
-  "not-implemented": 501,
 };
 
 function failureResponse(error: unknown): Response {

@@ -1,7 +1,10 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
+
+const execFileAsync = promisify(execFile);
 
 import type { AuthStore } from "../auth";
 import type { CredentialStore } from "../server/integrations/credentials";
@@ -36,8 +39,7 @@ export type ServiceFailureCode =
   | "duplicate-id"
   | "in-use"
   | "credentials-unavailable"
-  | "invalid-composition"
-  | "not-implemented";
+  | "invalid-composition";
 
 export class ServiceFailure extends Error {
   constructor(
@@ -300,16 +302,24 @@ async function applyMutations(
 
   // Real filesystem writes, unlike the in-memory mutations below. Every
   // composition in the batch is generated and type-checked into a temp file
-  // first; only once ALL of them pass are any renamed into tracked source —
-  // one invalid tree in a multi-assemble batch must not leave an earlier,
-  // valid one already landed.
+  // up front — but not renamed into tracked source until the rest of the
+  // batch (in-memory mutations, config persistence) has also succeeded, so
+  // a `remove-card`/`add-card`-style failure elsewhere in the same batch
+  // can't leave a template file landed with no matching config write.
   const assembled: { tempPath: string; finalPath: string }[] = [];
+  let next: DashboardConfiguration;
   try {
     for (const mutation of mutations) {
       if (mutation.type === "assemble-card-template") {
         assembled.push(await checkCardTemplateSource(mutation));
       }
     }
+
+    const candidate = structuredClone(configuration);
+    for (const mutation of mutations) applyMutation(candidate, mutation);
+    next = parseDashboardConfiguration(candidate);
+    await dependencies.persistence.write(next);
+
     for (const { tempPath, finalPath } of assembled) {
       await rename(tempPath, finalPath);
     }
@@ -319,11 +329,6 @@ async function applyMutations(
     );
     throw error;
   }
-
-  const candidate = structuredClone(configuration);
-  for (const mutation of mutations) applyMutation(candidate, mutation);
-  const next = parseDashboardConfiguration(candidate);
-  await dependencies.persistence.write(next);
 
   // Revoking an integration's authorization rides along with removing it
   // (D16) — there is no "disconnect without removing" action to hang a
@@ -557,23 +562,32 @@ function toComponentName(template: string): string {
  * every assemble call.
  */
 async function typeChecks(temporaryPath: string): Promise<boolean> {
-  const relativePath = temporaryPath
-    .slice(process.cwd().length + 1)
-    .split("\\")
-    .join("/");
+  // Written under .local/ (gitignored) rather than next to the real
+  // tsconfig.json, so a crash mid-check can't leave a stray config file
+  // where a broad `git add` would pick it up. Stays inside the repo (unlike
+  // the OS temp dir) so `tsc`'s upward node_modules/@types search still
+  // finds this project's — an outside-the-tree config fails on `types:
+  // ["node"]` alone. Both `extends` and `include` use absolute paths since
+  // this file's directory isn't the project root.
+  const localDir = join(process.cwd(), ".local");
+  await mkdir(localDir, { recursive: true });
   const scopedConfigPath = join(
-    process.cwd(),
+    localDir,
     `tsconfig.assemble.${randomUUID()}.json`,
   );
   await writeFile(
     scopedConfigPath,
-    JSON.stringify({ extends: "./tsconfig.json", include: [relativePath] }),
+    JSON.stringify({
+      extends: join(process.cwd(), "tsconfig.json"),
+      include: [temporaryPath],
+    }),
   );
   try {
-    execFileSync(process.execPath, [tscBin, "--noEmit", "-p", scopedConfigPath], {
-      cwd: process.cwd(),
-      stdio: "pipe",
-    });
+    await execFileAsync(
+      process.execPath,
+      [tscBin, "--noEmit", "-p", scopedConfigPath],
+      { cwd: process.cwd() },
+    );
     return true;
   } catch {
     return false;

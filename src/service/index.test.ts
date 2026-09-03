@@ -405,6 +405,30 @@ describe("card template assembly", () => {
 
     await expect(readFile(templatePath, "utf8")).rejects.toThrow();
   });
+
+  test("fails a real component given a wrong prop type, not just an unknown one", async () => {
+    // Unlike the unknown-component case above (which fails on the import
+    // line before JSX is even checked), this proves the scoped tsconfig
+    // still runs full prop typechecking against react-aria-components' real
+    // types — the whole point of dropping the per-component registry (D22).
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        {
+          type: "assemble-card-template",
+          template: "__test-assembled",
+          composition: {
+            component: "Heading",
+            props: { level: "two" },
+            children: [],
+          },
+        },
+      ]),
+    ).rejects.toThrow("failed to type-check");
+
+    await expect(readFile(templatePath, "utf8")).rejects.toThrow();
+  });
 });
 
 describe("integration authorization", () => {

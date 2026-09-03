@@ -287,7 +287,9 @@ const removeThemeMutationSchema = z
 const assembleCardTemplateMutationSchema = z
   .object({
     type: z.literal("assemble-card-template"),
-    template: z.string().min(1),
+    // Becomes a filesystem path segment in `service` — no path separators,
+    // no `.`, so it can't traverse out of the card-templates directory.
+    template: z.string().regex(/^[A-Za-z0-9_-]+$/),
     composition: compositionNodeSchema,
   })
   .strict();
