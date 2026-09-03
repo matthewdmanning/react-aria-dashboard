@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { readFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
   defaultDashboardConfiguration,
@@ -349,6 +351,59 @@ describe("dashboard service", () => {
     await expect(
       service.apply([{ type: "remove-theme", themeId: "calm" }]),
     ).rejects.toThrow("because dashboard 'home' uses it");
+  });
+});
+
+describe("card template assembly", () => {
+  const templatePath = join(
+    process.cwd(),
+    "src",
+    "client",
+    "cards",
+    "__test-assembled.tsx",
+  );
+
+  test("assembles a valid composition tree into tracked source", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    try {
+      await expect(
+        service.apply([
+          {
+            type: "assemble-card-template",
+            template: "__test-assembled",
+            composition: { component: "Text", props: {}, children: [] },
+          },
+        ]),
+      ).resolves.toBeDefined();
+
+      const source = await readFile(templatePath, "utf8");
+      expect(source).toContain(
+        'import { Text } from "react-aria-components"',
+      );
+    } finally {
+      await unlink(templatePath).catch(() => undefined);
+    }
+  });
+
+  test("fails before writing when the tree does not type-check", async () => {
+    const service = createService({ persistence: createMemoryPersistence() });
+
+    await expect(
+      service.apply([
+        {
+          type: "assemble-card-template",
+          template: "__test-assembled",
+          composition: {
+            component: "NotARealComponent",
+            props: {},
+            children: [],
+          },
+        },
+      ]),
+    ).rejects.toThrow("failed to type-check");
+
+    await expect(readFile(templatePath, "utf8")).rejects.toThrow();
   });
 });
 

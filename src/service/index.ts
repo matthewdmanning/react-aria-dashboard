@@ -1,8 +1,10 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 import type { AuthStore } from "../auth";
 import type { CredentialStore } from "../server/integrations/credentials";
+import { generateComponentSource } from "../card-templates/codegen";
 import {
   defaultDashboardConfiguration,
   mutationRequirements,
@@ -33,6 +35,7 @@ export type ServiceFailureCode =
   | "duplicate-id"
   | "in-use"
   | "credentials-unavailable"
+  | "invalid-composition"
   | "not-implemented";
 
 export class ServiceFailure extends Error {
@@ -294,6 +297,16 @@ async function applyMutations(
     }
   }
 
+  // Real filesystem writes, unlike the in-memory mutations below — fails
+  // before touching tracked source (verified via `tsc`) and before
+  // `persistence.write`, so a bad composition never lands anywhere and the
+  // batch stays atomic.
+  for (const mutation of mutations) {
+    if (mutation.type === "assemble-card-template") {
+      await writeCardTemplateSource(mutation);
+    }
+  }
+
   const candidate = structuredClone(configuration);
   for (const mutation of mutations) applyMutation(candidate, mutation);
   const next = parseDashboardConfiguration(candidate);
@@ -505,13 +518,53 @@ function applyMutation(
       return;
     }
     case "assemble-card-template":
-      // Schema and permission gate land here (#74); assembling the
-      // composition tree into a real component is a separate ticket.
-      throw new ServiceFailure(
-        "not-implemented",
-        "assemble-card-template is not yet implemented",
-      );
+      // Already written to src/client/cards/ above, before this loop runs —
+      // nothing left to change on the configuration itself (#76 registers
+      // the template's schema so cards can reference it).
+      return;
   }
+}
+
+const cardTemplatesDir = join(process.cwd(), "src", "client", "cards");
+const tscBin = join(process.cwd(), "node_modules", "typescript", "bin", "tsc");
+
+function toComponentName(template: string): string {
+  return template
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join("");
+}
+
+async function writeCardTemplateSource(
+  mutation: Extract<Mutation, { type: "assemble-card-template" }>,
+): Promise<void> {
+  const source = generateComponentSource(
+    mutation.composition,
+    toComponentName(mutation.template),
+  );
+  await mkdir(cardTemplatesDir, { recursive: true });
+  const finalPath = join(cardTemplatesDir, `${mutation.template}.tsx`);
+  // A dot-prefixed name would be silently excluded from tsc's default
+  // `include` globbing, defeating the type-check this file exists for.
+  const temporaryPath = join(
+    cardTemplatesDir,
+    `__assemble-${mutation.template}.tsx`,
+  );
+  await writeFile(temporaryPath, source);
+  try {
+    execFileSync(process.execPath, [tscBin, "--noEmit", "-p", "tsconfig.json"], {
+      cwd: process.cwd(),
+      stdio: "pipe",
+    });
+  } catch {
+    await unlink(temporaryPath).catch(() => undefined);
+    throw new ServiceFailure(
+      "invalid-composition",
+      `Composition tree for template '${mutation.template}' failed to type-check`,
+    );
+  }
+  await rename(temporaryPath, finalPath);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
