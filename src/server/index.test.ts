@@ -1,128 +1,424 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { defaultDashboardConfiguration } from "../dashboard";
+import { defaultDashboardConfiguration } from "../contract";
+import {
+  createService,
+  type DashboardPersistence,
+  type DashboardService,
+} from "../service";
+import type { CredentialStore } from "./integrations/credentials";
 import {
   handleDashboardConfigurationRequest,
-  handleGoogleCalendarRequest,
-  handleSourcesRequest,
+  handleIntegrationAuthorizeRequest,
+  handleIntegrationRefreshRequest,
+  handleIntegrationTypesRequest,
 } from "./index";
 
-describe("Settings configuration API contract", () => {
-  test("saves and reloads configuration through the HTTP interface", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "settings-api-"));
-    const path = join(directory, "dashboard.json");
-    const changed = { ...defaultDashboardConfiguration, theme: "contrast" };
+function createMemoryPersistence(
+  initial = defaultDashboardConfiguration,
+): DashboardPersistence {
+  let configuration = structuredClone(initial);
+  return {
+    read: async () => structuredClone(configuration),
+    write: async (next) => {
+      configuration = structuredClone(next);
+    },
+  };
+}
 
-    const saved = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify(changed),
-      }),
-      path,
-    );
-    const loaded = await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration"),
-      path,
+function createMemoryCredentialStore(): CredentialStore {
+  const values = new Map<string, string>();
+  return {
+    get: async (id) => values.get(id),
+    set: async (id, credential) => {
+      values.set(id, credential);
+    },
+    remove: async (id) => {
+      values.delete(id);
+    },
+  };
+}
+
+function createTestService(
+  initial = defaultDashboardConfiguration,
+  extra: { credentials?: CredentialStore; connectableTypes?: string[] } = {},
+): DashboardService {
+  return createService({
+    persistence: createMemoryPersistence(initial),
+    ...extra,
+  });
+}
+
+describe("dashboard service HTTP transport", () => {
+  test("reads the requested scope through the service", async () => {
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration?scope=all"),
+      createTestService(),
     );
 
-    expect(saved.status).toBe(204);
-    await expect(loaded.json()).resolves.toEqual(changed);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      cards: defaultDashboardConfiguration.cards,
+      dashboard: defaultDashboardConfiguration.dashboard,
+      themes: defaultDashboardConfiguration.themes,
+      fontScale: defaultDashboardConfiguration.fontScale,
+      integrations: defaultDashboardConfiguration.integrations,
+    });
   });
 
-  test("loads retained data and refreshes through the explicit pull endpoint", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "calendar-api-"));
-    const configurationPath = join(directory, "dashboard.json");
-    const dataPath = join(directory, "google-calendar.json");
-    await handleDashboardConfigurationRequest(
+  test("applies mutation lists through the service", async () => {
+    const service = createTestService();
+    const response = await handleDashboardConfigurationRequest(
       new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...defaultDashboardConfiguration,
-          integrations: [
+        method: "POST",
+        body: JSON.stringify([
+          {
+            type: "set-font-scale",
+            fontScale: 1.25,
+          },
+        ]),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ fontScale: 1.25 });
+  });
+
+  test("returns service permission errors without a second authorization check", async () => {
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration?scope=roles"),
+      createTestService(),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
+    });
+  });
+
+  test("maps each service failure onto its own status", async () => {
+    const service = createTestService();
+
+    const missing = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([
+          { type: "edit-theme", theme: { id: "absent", settings: {} } },
+        ]),
+      }),
+      service,
+    );
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({ code: "unknown-id" });
+
+    const inUse = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([{ type: "remove-theme", themeId: "calm" }]),
+      }),
+      service,
+    );
+    expect(inUse.status).toBe(409);
+    await expect(inUse.json()).resolves.toMatchObject({ code: "in-use" });
+
+    const unauthenticated = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        headers: { authorization: "Basic nope" },
+      }),
+      service,
+    );
+    expect(unauthenticated.status).toBe(401);
+  });
+});
+
+describe("integration refresh endpoint", () => {
+  const calendarQuery = {
+    integration: "team-calendar",
+    query: { calendarId: "team" },
+    formatter: {
+      shape: "array" as const,
+      from: ["items"],
+      into: "events",
+      fields: {
+        id: { from: ["id"], coerce: "string" as const },
+        title: { from: ["summary"], default: "Untitled event" },
+        start: { from: ["start.dateTime"] },
+      },
+    },
+  };
+
+  test("runs every card's queries through the service and patches card state", async () => {
+    const source = {
+      items: [
+        {
+          id: "event-1",
+          summary: "Planning",
+          start: { dateTime: "2026-08-27T09:00:00-04:00" },
+        },
+      ],
+    };
+    const pull = vi.fn(async () => Response.json(source));
+    const service = createTestService({
+      ...defaultDashboardConfiguration,
+      integrations: [
+        { id: "team-calendar", type: "google-calendar", settings: {} },
+        { id: "unknown", type: "not-built-in", settings: {} },
+      ],
+      cards: [
+        ...defaultDashboardConfiguration.cards,
+        {
+          id: "calendar-card",
+          title: "Calendar",
+          template: "calendar",
+          state: { events: [] },
+          queries: [calendarQuery],
+        },
+        {
+          id: "unsupported-card",
+          title: "Unsupported",
+          template: "message",
+          state: { message: "unchanged" },
+          queries: [
             {
-              id: "calendar",
-              type: "google-calendar",
-              settings: { calendarId: "team" },
+              integration: "unknown",
+              query: {},
+              formatter: { shape: "object" as const, fields: {} },
             },
           ],
-        }),
-      }),
-      configurationPath,
-    );
-    const source = { items: [{ id: "event-1", summary: "Planning" }] };
+        },
+      ],
+    });
 
-    const refreshed = await handleGoogleCalendarRequest(
-      new Request("http://dashboard/api/google-calendar", { method: "POST" }),
-      configurationPath,
-      dataPath,
+    const response = await handleIntegrationRefreshRequest(
+      new Request("http://dashboard/api/integrations/refresh", {
+        method: "POST",
+      }),
+      { service, tokenProvider: async () => "access-token", fetch: pull },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      { cardId: "calendar-card", status: "refreshed" },
+      { cardId: "unsupported-card", status: "unsupported" },
+    ]);
+
+    const cards = await service.read("cards");
+    expect(cards.find(({ id }) => id === "calendar-card")).toMatchObject({
+      state: {
+        events: [
+          {
+            id: "event-1",
+            title: "Planning",
+            start: "2026-08-27T09:00:00-04:00",
+          },
+        ],
+      },
+    });
+    expect(cards.find(({ id }) => id === "unsupported-card")).toMatchObject({
+      state: { message: "unchanged" },
+    });
+  });
+
+  test("reports one card query's failure without stopping the rest", async () => {
+    const service = createTestService({
+      ...defaultDashboardConfiguration,
+      integrations: [
+        { id: "team-calendar", type: "google-calendar", settings: {} },
+      ],
+      cards: [
+        ...defaultDashboardConfiguration.cards,
+        {
+          id: "calendar-card",
+          title: "Calendar",
+          template: "calendar",
+          state: { events: [] },
+          queries: [calendarQuery],
+        },
+      ],
+    });
+
+    const response = await handleIntegrationRefreshRequest(
+      new Request("http://dashboard/api/integrations/refresh", {
+        method: "POST",
+      }),
       {
-        tokenProvider: async () => "access-token",
-        fetch: async (url, init) => {
-          expect(url).toContain("team");
-          expect(init?.headers).toEqual({
-            Authorization: "Bearer access-token",
-          });
-          return Response.json(source);
+        service,
+        tokenProvider: async () => {
+          throw new Error("Credentials are not configured");
         },
       },
     );
 
-    expect(refreshed.status).toBe(200);
-    await expect(refreshed.json()).resolves.toEqual(source);
-    expect(JSON.parse(await readFile(dataPath, "utf8"))).toEqual(source);
-    await expect(
-      handleGoogleCalendarRequest(
-        new Request("http://dashboard/api/google-calendar"),
-        configurationPath,
-        dataPath,
-        { tokenProvider: async () => "unused" },
-      ).then((response) => response.json()),
-    ).resolves.toEqual(source);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      {
+        cardId: "calendar-card",
+        status: "failed",
+        message: "Credentials are not configured",
+      },
+    ]);
+  });
+});
+
+describe("integration types endpoint", () => {
+  test("lists the services this build can pull from", async () => {
+    const service = createTestService(defaultDashboardConfiguration, {
+      connectableTypes: ["google-calendar"],
+    });
+
+    const response = await handleIntegrationTypesRequest(
+      new Request("http://dashboard/api/integrations/types"),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(["google-calendar"]);
   });
 
-  test("serves every wired source it can find, skipping missing files", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "sources-api-"));
-    const configurationPath = join(directory, "dashboard.json");
-    const dataPath = join(directory, "data");
-    await mkdir(dataPath, { recursive: true });
-    await writeFile(
-      join(dataPath, "welcome.json"),
-      JSON.stringify({ text: "Ready" }),
-    );
-    await handleDashboardConfigurationRequest(
-      new Request("http://dashboard/api/dashboard-configuration", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...defaultDashboardConfiguration,
-          cards: [
-            { id: "welcome", title: "Dashboard", template: "message" },
-            { id: "missing", title: "Missing", template: "message" },
-          ],
-          wiring: [
-            { cardId: "welcome", source: "welcome", formatter: "message" },
-            {
-              cardId: "missing",
-              source: "no-such-source",
-              formatter: "identity",
+  test("resolves a role like every other request, refusing a caller with no integrations access", async () => {
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        roles: [
+          {
+            name: "local",
+            permissions: {
+              data: "write",
+              cards: "write",
+              presentation: "write",
+              integrations: "none",
+              roles: "none",
             },
-          ],
-          arrangement: ["welcome", "missing"],
+          },
+        ],
+      },
+      { connectableTypes: ["google-calendar"] },
+    );
+
+    const response = await handleIntegrationTypesRequest(
+      new Request("http://dashboard/api/integrations/types"),
+      service,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
+    });
+  });
+});
+
+describe("integration authorization endpoint", () => {
+  test("stores a connection's credential through the one enforcement point", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      },
+      {
+        credentials,
+      },
+    );
+
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({
+          integrationId: "team-calendar",
+          credential: "secret-token",
         }),
       }),
-      configurationPath,
+      service,
     );
 
-    const response = await handleSourcesRequest(
-      new Request("http://dashboard/api/sources"),
-      configurationPath,
-      dataPath,
+    expect(response.status).toBe(200);
+    await expect(credentials.get("team-calendar")).resolves.toBe(
+      "secret-token",
+    );
+  });
+
+  test("refuses a caller without integrations: edit", async () => {
+    const credentials = createMemoryCredentialStore();
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        roles: [
+          {
+            name: "local",
+            permissions: {
+              data: "write",
+              cards: "write",
+              presentation: "write",
+              integrations: "read",
+              roles: "none",
+            },
+          },
+        ],
+      },
+      { credentials },
     );
 
-    await expect(response.json()).resolves.toEqual({
-      welcome: { text: "Ready" },
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({
+          integrationId: "team-calendar",
+          credential: "secret-token",
+        }),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "permission-denied",
     });
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
+  });
+
+  test("requires both an integrationId and a credential", async () => {
+    const response = await handleIntegrationAuthorizeRequest(
+      new Request("http://dashboard/api/integrations/authorize", {
+        method: "POST",
+        body: JSON.stringify({ integrationId: "team-calendar" }),
+      }),
+      createTestService(defaultDashboardConfiguration, {
+        credentials: createMemoryCredentialStore(),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("revoking an integration's authorization", () => {
+  test("removing an integration through the dashboard-configuration endpoint drops its stored credential", async () => {
+    const credentials = createMemoryCredentialStore();
+    await credentials.set("team-calendar", "secret-token");
+    const service = createTestService(
+      {
+        ...defaultDashboardConfiguration,
+        integrations: [
+          { id: "team-calendar", type: "google-calendar", settings: {} },
+        ],
+      },
+      { credentials },
+    );
+
+    const response = await handleDashboardConfigurationRequest(
+      new Request("http://dashboard/api/dashboard-configuration", {
+        method: "POST",
+        body: JSON.stringify([
+          { type: "remove-integration", integrationId: "team-calendar" },
+        ]),
+      }),
+      service,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(credentials.get("team-calendar")).resolves.toBeUndefined();
   });
 });

@@ -1,8 +1,14 @@
 import * as z from "zod/v4";
 
-export { cardTemplateSchemas, type CardTemplateName } from "./card-templates";
+import { cardTemplateSchemas, type CardTemplateName } from "./card-templates";
 
-const permissionLevelSchema = z.enum(["none", "read", "write"]);
+export { cardTemplateSchemas, type CardTemplateName };
+
+const cardTemplateNameSchema = z.enum(
+  Object.keys(cardTemplateSchemas) as [CardTemplateName, ...CardTemplateName[]],
+);
+
+const permissionLevelSchema = z.enum(["none", "read", "edit", "write"]);
 
 export type PermissionLevel = z.infer<typeof permissionLevelSchema>;
 
@@ -37,13 +43,24 @@ export const roleSchema = z
 
 export type Role = z.infer<typeof roleSchema>;
 
+const credentialKey = /credential|password|secret|token|api.?key|access.?key/i;
+
 export const integrationSchema = z
   .object({
     id: z.string().min(1),
     type: z.string().min(1),
     settings: z.record(z.string(), z.unknown()),
   })
-  .strict();
+  .strict()
+  .superRefine(({ settings }, context) => {
+    if (Object.keys(settings).some((key) => credentialKey.test(key))) {
+      context.addIssue({
+        code: "custom",
+        path: ["settings"],
+        message: "Integration credentials are not allowed",
+      });
+    }
+  });
 
 export type Integration = z.infer<typeof integrationSchema>;
 
@@ -100,7 +117,7 @@ export const cardSchema = z
   .object({
     id: z.string().min(1),
     title: z.string(),
-    template: z.string().min(1),
+    template: cardTemplateNameSchema,
     state: z.unknown(),
     queries: z.array(querySchema),
   })
@@ -122,12 +139,21 @@ export const dashboardConfigurationSchema = z
   .object({
     integrations: z.array(integrationSchema),
     themes: z.array(themeSchema),
-    dashboards: z.array(dashboardSchema),
+    dashboard: dashboardSchema,
     fontScale: z.number().min(0.75).max(2),
     roles: z.array(roleSchema),
     cards: z.array(cardSchema),
   })
   .strict();
+
+/**
+ * What `read("all")` returns: the categories the caller may read, with the rest
+ * omitted. Parsing a projection with the full schema would reject a caller who
+ * is denied one category, which is what omitting rather than failing avoids.
+ */
+export const readableDashboardSchema = dashboardConfigurationSchema.partial();
+
+export type ReadableDashboard = z.infer<typeof readableDashboardSchema>;
 
 export type DashboardConfiguration = z.infer<
   typeof dashboardConfigurationSchema
@@ -136,7 +162,6 @@ export type DashboardConfiguration = z.infer<
 const cardStateMutationSchema = z
   .object({
     type: z.literal("patch-card-state"),
-    permission: z.literal("data"),
     cardId: z.string().min(1),
     patch: z.unknown(),
   })
@@ -145,7 +170,6 @@ const cardStateMutationSchema = z
 const addCardMutationSchema = z
   .object({
     type: z.literal("add-card"),
-    permission: z.literal("cards"),
     card: cardSchema,
   })
   .strict();
@@ -153,7 +177,6 @@ const addCardMutationSchema = z
 const editCardMutationSchema = z
   .object({
     type: z.literal("edit-card"),
-    permission: z.literal("cards"),
     card: cardSchema,
   })
   .strict();
@@ -161,7 +184,6 @@ const editCardMutationSchema = z
 const removeCardMutationSchema = z
   .object({
     type: z.literal("remove-card"),
-    permission: z.literal("cards"),
     cardId: z.string().min(1),
   })
   .strict();
@@ -169,7 +191,6 @@ const removeCardMutationSchema = z
 const insertCardMutationSchema = z
   .object({
     type: z.literal("insert-card"),
-    permission: z.literal("presentation"),
     dashboardId: z.string().min(1),
     cardId: z.string().min(1),
     index: z.number().int().nonnegative().optional(),
@@ -179,15 +200,20 @@ const insertCardMutationSchema = z
 const editDashboardMutationSchema = z
   .object({
     type: z.literal("edit-dashboard"),
-    permission: z.literal("presentation"),
     dashboard: dashboardSchema,
+  })
+  .strict();
+
+const addThemeMutationSchema = z
+  .object({
+    type: z.literal("add-theme"),
+    theme: themeSchema,
   })
   .strict();
 
 const editThemeMutationSchema = z
   .object({
     type: z.literal("edit-theme"),
-    permission: z.literal("presentation"),
     theme: themeSchema,
   })
   .strict();
@@ -195,15 +221,20 @@ const editThemeMutationSchema = z
 const setFontScaleMutationSchema = z
   .object({
     type: z.literal("set-font-scale"),
-    permission: z.literal("presentation"),
     fontScale: z.number().min(0.75).max(2),
+  })
+  .strict();
+
+const addIntegrationMutationSchema = z
+  .object({
+    type: z.literal("add-integration"),
+    integration: integrationSchema,
   })
   .strict();
 
 const editIntegrationMutationSchema = z
   .object({
     type: z.literal("edit-integration"),
-    permission: z.literal("integrations"),
     integration: integrationSchema,
   })
   .strict();
@@ -211,24 +242,14 @@ const editIntegrationMutationSchema = z
 const removeIntegrationMutationSchema = z
   .object({
     type: z.literal("remove-integration"),
-    permission: z.literal("integrations"),
     integrationId: z.string().min(1),
   })
   .strict();
 
-const editRoleMutationSchema = z
+const removeThemeMutationSchema = z
   .object({
-    type: z.literal("edit-role"),
-    permission: z.literal("roles"),
-    role: roleSchema,
-  })
-  .strict();
-
-const removeRoleMutationSchema = z
-  .object({
-    type: z.literal("remove-role"),
-    permission: z.literal("roles"),
-    roleName: z.string().min(1),
+    type: z.literal("remove-theme"),
+    themeId: z.string().min(1),
   })
   .strict();
 
@@ -239,21 +260,49 @@ export const mutationSchema = z.discriminatedUnion("type", [
   removeCardMutationSchema,
   insertCardMutationSchema,
   editDashboardMutationSchema,
+  addThemeMutationSchema,
   editThemeMutationSchema,
+  removeThemeMutationSchema,
   setFontScaleMutationSchema,
+  addIntegrationMutationSchema,
   editIntegrationMutationSchema,
   removeIntegrationMutationSchema,
-  editRoleMutationSchema,
-  removeRoleMutationSchema,
 ]);
 
 export type Mutation = z.infer<typeof mutationSchema>;
 export const mutationsSchema = z.array(mutationSchema).min(1);
 
+export interface MutationRequirement {
+  category: PermissionCategory;
+  level: PermissionLevel;
+}
+
+/**
+ * What each mutation type requires. Both facts belong to the type rather than
+ * to an instance, so a caller states only its payload and `service` enforces
+ * with one lookup. `edit` changes something that already exists; `write` also
+ * creates and destroys.
+ */
+export const mutationRequirements = {
+  "patch-card-state": { category: "data", level: "edit" },
+  "add-card": { category: "cards", level: "write" },
+  "edit-card": { category: "cards", level: "edit" },
+  "remove-card": { category: "cards", level: "write" },
+  "insert-card": { category: "presentation", level: "edit" },
+  "edit-dashboard": { category: "presentation", level: "edit" },
+  "add-theme": { category: "presentation", level: "write" },
+  "edit-theme": { category: "presentation", level: "edit" },
+  "remove-theme": { category: "presentation", level: "write" },
+  "set-font-scale": { category: "presentation", level: "edit" },
+  "add-integration": { category: "integrations", level: "write" },
+  "edit-integration": { category: "integrations", level: "edit" },
+  "remove-integration": { category: "integrations", level: "write" },
+} as const satisfies Record<Mutation["type"], MutationRequirement>;
+
 export const defaultDashboardConfiguration: DashboardConfiguration = {
   integrations: [],
   themes: [{ id: "calm", settings: {} }],
-  dashboards: [{ id: "home", cards: ["welcome"], theme: "calm" }],
+  dashboard: { id: "home", cards: ["welcome"], theme: "calm" },
   fontScale: 1,
   roles: [
     {
@@ -288,18 +337,6 @@ export function parseDashboardConfiguration(
   candidate: unknown,
 ): DashboardConfiguration {
   const configuration = dashboardConfigurationSchema.parse(candidate);
-  const credentialKey =
-    /credential|password|secret|token|api.?key|access.?key/i;
-
-  if (
-    configuration.integrations.some(({ settings }) =>
-      Object.keys(settings).some((key) => credentialKey.test(key)),
-    )
-  ) {
-    throw new Error(
-      "Invalid dashboard configuration: integration credentials are not allowed",
-    );
-  }
 
   assertUnique(
     configuration.integrations.map(({ id }) => id),
@@ -310,11 +347,13 @@ export function parseDashboardConfiguration(
     "theme id",
   );
   assertUnique(
-    configuration.dashboards.map(({ id }) => id),
-    "dashboard id",
+    configuration.cards.map(({ id }) => id),
+    "card id",
   );
-  assertUnique(configuration.cards.map(({ id }) => id), "card id");
-  assertUnique(configuration.roles.map(({ name }) => name), "role name");
+  assertUnique(
+    configuration.roles.map(({ name }) => name),
+    "role name",
+  );
 
   const cardIds = new Set(configuration.cards.map(({ id }) => id));
   const themeIds = new Set(configuration.themes.map(({ id }) => id));
@@ -322,19 +361,21 @@ export function parseDashboardConfiguration(
     configuration.integrations.map(({ id }) => id),
   );
 
-  for (const dashboard of configuration.dashboards) {
-    assertUnique(dashboard.cards, `card reference in dashboard '${dashboard.id}'`);
-    if (!themeIds.has(dashboard.theme)) {
+  const { dashboard } = configuration;
+  assertUnique(
+    dashboard.cards,
+    `card reference in dashboard '${dashboard.id}'`,
+  );
+  if (!themeIds.has(dashboard.theme)) {
+    throw new Error(
+      `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown theme '${dashboard.theme}'`,
+    );
+  }
+  for (const cardId of dashboard.cards) {
+    if (!cardIds.has(cardId)) {
       throw new Error(
-        `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown theme '${dashboard.theme}'`,
+        `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown card '${cardId}'`,
       );
-    }
-    for (const cardId of dashboard.cards) {
-      if (!cardIds.has(cardId)) {
-        throw new Error(
-          `Invalid dashboard configuration: dashboard '${dashboard.id}' references unknown card '${cardId}'`,
-        );
-      }
     }
   }
 
@@ -345,6 +386,13 @@ export function parseDashboardConfiguration(
           `Invalid dashboard configuration: card '${card.id}' references unknown integration '${query.integration}'`,
         );
       }
+    }
+
+    const state = cardTemplateSchemas[card.template].safeParse(card.state);
+    if (!state.success) {
+      throw new Error(
+        `Invalid dashboard configuration: card '${card.id}' state does not fit card template '${card.template}': ${z.prettifyError(state.error)}`,
+      );
     }
   }
 

@@ -1,134 +1,241 @@
-import { join, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
-import { formatterSpecSchema } from "../dashboard";
 import {
-  createDashboardOperations,
-  type DashboardMcpDependencies,
-  type DashboardMcpPaths,
-} from "./operations";
+  cardSchema,
+  dashboardSchema,
+  integrationSchema,
+  themeSchema,
+  type Mutation,
+} from "../contract";
+import { ServiceFailure, type DashboardService } from "../service";
 
-const cardArgsSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  template: z.string(),
-  source: z.string(),
-  formatter: z.string().optional(),
-  formatterSpec: formatterSpecSchema.optional(),
-});
+const readScopeSchema = z.enum([
+  "all",
+  "role",
+  "data",
+  "cards",
+  "presentation",
+  "integrations",
+  "roles",
+]);
 
-function result(text: string) {
-  return { content: [{ type: "text" as const, text }] };
+function result(
+  text: string,
+  isError = false,
+  structuredContent?: Record<string, unknown>,
+) {
+  return {
+    content: [{ type: "text" as const, text }],
+    isError,
+    ...(structuredContent ? { structuredContent } : {}),
+  };
 }
 
-export function createDashboardMcpServer(
-  workspacePath = process.env.DASHBOARD_WORKSPACE ?? process.cwd(),
-  dependencies?: DashboardMcpDependencies,
-  paths?: DashboardMcpPaths,
-) {
-  const workspace = resolve(workspacePath);
-  const operations = createDashboardOperations(workspace, dependencies, {
-    configurationPath:
-      paths?.configurationPath ??
-      process.env.DASHBOARD_DATA_PATH ??
-      join(workspace, ".dashboard", "dashboard.json"),
-    calendarDataPath:
-      paths?.calendarDataPath ??
-      process.env.DASHBOARD_CALENDAR_DATA_PATH ??
-      join(workspace, ".dashboard", "google-calendar.json"),
-  });
+/**
+ * Service failures — denied permissions, unknown ids, refused removals — are
+ * answers the caller can act on, so they come back as tool results rather than
+ * protocol errors. Per D14, the service's own name for the failure travels
+ * with the result as `structuredContent.code`, so a caller can act on the
+ * code rather than matching on the message text.
+ */
+async function reply(operation: () => Promise<string>) {
+  try {
+    return result(await operation());
+  } catch (error) {
+    if (error instanceof ServiceFailure) {
+      return result(error.message, true, { code: error.code });
+    }
+    return result(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+export function createDashboardMcpServer(service: DashboardService) {
   const server = new McpServer({
     name: "personal-dashboard",
     version: "0.0.0",
   });
 
+  const apply = (mutation: Mutation, message: string) =>
+    reply(async () => {
+      await service.apply([mutation]);
+      return message;
+    });
+
+  server.registerTool(
+    "read-dashboard",
+    {
+      description: "Read the dashboard state allowed by the caller's role. Scope 'role' returns the caller's own permissions.",
+      inputSchema: z.object({
+        scope: readScopeSchema.default("all"),
+      }),
+    },
+    async ({ scope }) =>
+      reply(async () => JSON.stringify(await service.read(scope))),
+  );
+
   server.registerTool(
     "add-card",
     {
-      description:
-        "Add a new card: pick a card template, a data source, and how to format it (identity, a named built-in, or a declarative formatterSpec).",
-      inputSchema: cardArgsSchema,
+      description: "Add a new card.",
+      inputSchema: z.object({ card: cardSchema }),
     },
-    async (args) => {
-      await operations.addCard(args);
-      return result("Card added");
-    },
+    async ({ card }) => apply({ type: "add-card", card }, "Card added"),
   );
   server.registerTool(
     "edit-card",
     {
-      description:
-        "Replace an existing card's template, source, and formatter.",
-      inputSchema: cardArgsSchema,
+      description: "Replace an existing card.",
+      inputSchema: z.object({ card: cardSchema }),
     },
-    async (args) => {
-      await operations.editCard(args);
-      return result("Card edited");
-    },
+    async ({ card }) => apply({ type: "edit-card", card }, "Card edited"),
   );
   server.registerTool(
     "remove-card",
     {
-      description:
-        "Delete a card and prune its dashboard wiring and arrangement.",
-      inputSchema: z.object({ id: z.string() }),
+      description: "Delete a card.",
+      inputSchema: z.object({ cardId: z.string() }),
     },
-    async ({ id }) => {
-      await operations.removeCard(id);
-      return result("Card removed");
-    },
+    async ({ cardId }) =>
+      apply({ type: "remove-card", cardId }, "Card removed"),
   );
 
   server.registerTool(
-    "refresh",
+    "patch-card-state",
+    {
+      description: "Patch the state displayed by an existing card.",
+      inputSchema: z.object({
+        cardId: z.string(),
+        patch: z.record(z.string(), z.unknown()),
+      }),
+    },
+    async ({ cardId, patch }) =>
+      apply({ type: "patch-card-state", cardId, patch }, "Card state updated"),
+  );
+
+  server.registerTool(
+    "insert-card",
+    {
+      description: "Place an existing card on the dashboard.",
+      inputSchema: z.object({
+        cardId: z.string(),
+        index: z.number().int().nonnegative().optional(),
+      }),
+    },
+    async ({ cardId, index }) =>
+      reply(async () => {
+        const { dashboard } = await service.read("presentation");
+        await service.apply([
+          {
+            type: "insert-card",
+            dashboardId: dashboard.id,
+            cardId,
+            index,
+          },
+        ]);
+        return "Card inserted";
+      }),
+  );
+
+  server.registerTool(
+    "edit-dashboard",
+    {
+      description: "Replace the dashboard document.",
+      inputSchema: z.object({ dashboard: dashboardSchema }),
+    },
+    async ({ dashboard }) =>
+      apply({ type: "edit-dashboard", dashboard }, "Dashboard updated"),
+  );
+
+  server.registerTool(
+    "add-theme",
+    {
+      description: "Add a theme.",
+      inputSchema: z.object({ theme: themeSchema }),
+    },
+    async ({ theme }) => apply({ type: "add-theme", theme }, "Theme added"),
+  );
+
+  server.registerTool(
+    "edit-theme",
+    {
+      description: "Replace an existing theme.",
+      inputSchema: z.object({ theme: themeSchema }),
+    },
+    async ({ theme }) => apply({ type: "edit-theme", theme }, "Theme edited"),
+  );
+
+  server.registerTool(
+    "remove-theme",
+    {
+      description: "Delete an unused theme.",
+      inputSchema: z.object({ themeId: z.string() }),
+    },
+    async ({ themeId }) =>
+      apply({ type: "remove-theme", themeId }, "Theme removed"),
+  );
+
+  server.registerTool(
+    "set-font-scale",
+    {
+      description: "Set the dashboard font scale.",
+      inputSchema: z.object({ fontScale: z.number().min(0.75).max(2) }),
+    },
+    async ({ fontScale }) =>
+      apply({ type: "set-font-scale", fontScale }, "Font scale updated"),
+  );
+
+  server.registerTool(
+    "add-integration",
+    {
+      description: "Add an integration.",
+      inputSchema: z.object({ integration: integrationSchema }),
+    },
+    async ({ integration }) =>
+      apply({ type: "add-integration", integration }, "Integration added"),
+  );
+
+  server.registerTool(
+    "edit-integration",
+    {
+      description: "Replace an existing integration.",
+      inputSchema: z.object({ integration: integrationSchema }),
+    },
+    async ({ integration }) =>
+      apply({ type: "edit-integration", integration }, "Integration edited"),
+  );
+
+  server.registerTool(
+    "remove-integration",
+    {
+      description: "Delete an integration not used by a card.",
+      inputSchema: z.object({ integrationId: z.string() }),
+    },
+    async ({ integrationId }) =>
+      apply(
+        {
+          type: "remove-integration",
+          integrationId,
+        },
+        "Integration removed",
+      ),
+  );
+
+  server.registerTool(
+    "authorize-integration",
     {
       description:
-        "Refresh a saved integration when data write access permits it.",
-      inputSchema: z.object({ source: z.string() }),
+        "Hand off an already-obtained credential (an access token, an API key) to authorize an existing integration.",
+      inputSchema: z.object({
+        integrationId: z.string(),
+        credential: z.string(),
+      }),
     },
-    async ({ source }) =>
-      result(JSON.stringify(await operations.refreshSource(source))),
-  );
-  server.registerTool(
-    "read-dashboard-settings",
-    {
-      description: "Read dashboard settings when Settings permits it.",
-      inputSchema: z.object({}),
-    },
-    async () =>
-      result(JSON.stringify(await operations.readDashboardSettings())),
-  );
-  server.registerTool(
-    "edit-dashboard-settings",
-    {
-      description:
-        "Replace dashboard settings while preserving Settings-owned agent permissions.",
-      inputSchema: z.object({ configuration: z.unknown() }),
-    },
-    async ({ configuration }) => {
-      await operations.editDashboardSettings(configuration);
-      return result("Dashboard settings updated");
-    },
-  );
-  server.registerTool(
-    "read-data-file",
-    {
-      description: "Read a file under data/ when Settings permits it.",
-      inputSchema: z.object({ path: z.string() }),
-    },
-    async ({ path }) => result(await operations.readDataFile(path)),
-  );
-  server.registerTool(
-    "edit-data-file",
-    {
-      description: "Write a file under data/ when Settings permits it.",
-      inputSchema: z.object({ path: z.string(), content: z.string() }),
-    },
-    async ({ path, content }) => {
-      await operations.editDataFile(path, content);
-      return result("Data file written");
-    },
+    async ({ integrationId, credential }) =>
+      reply(async () => {
+        await service.authorize(integrationId, credential);
+        return "Integration authorized";
+      }),
   );
 
   return server;

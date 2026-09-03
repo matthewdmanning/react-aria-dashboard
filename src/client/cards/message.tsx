@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import type * as z from "zod/v4";
 
-import type { CardTemplate } from "../../dashboard";
 import { cardTemplateSchemas } from "../../contract";
+import type { CardTemplate } from "./index";
 
 export type MessageCardData = z.infer<typeof cardTemplateSchemas.message>;
 

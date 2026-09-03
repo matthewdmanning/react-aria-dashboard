@@ -1,33 +1,9 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 
-import { defaultDashboardConfiguration } from "../../dashboard";
-import { replaceDashboardConfiguration } from "../dashboard-store";
-import { formatGoogleCalendar } from "../../client/formatters/google-calendar";
 import { pullGoogleCalendar } from "./google-calendar";
 
-async function calendarFiles() {
-  const directory = await mkdtemp(join(tmpdir(), "google-calendar-"));
-  const configurationPath = join(directory, "dashboard.json");
-  const dataPath = join(directory, "calendar.json");
-  await replaceDashboardConfiguration(configurationPath, {
-    ...defaultDashboardConfiguration,
-    integrations: [
-      {
-        id: "work-calendar",
-        type: "google-calendar",
-        settings: { calendarId: "team@example.com" },
-      },
-    ],
-  });
-  return { configurationPath, dataPath };
-}
-
 describe("Google Calendar integration contract", () => {
-  test("pulls the saved calendar, retains its raw response, and formats card data separately", async () => {
-    const paths = await calendarFiles();
+  test("pulls the calendar named by the query, unmodified", async () => {
     const source = {
       kind: "calendar#events",
       nextSyncToken: "next-token",
@@ -44,8 +20,12 @@ describe("Google Calendar integration contract", () => {
     const fetchCalendar = vi.fn(async () => Response.json(source));
 
     const pulled = await pullGoogleCalendar({
-      ...paths,
-      tokenProvider: async () => "access-token",
+      integrationId: "work-calendar",
+      query: { calendarId: "team@example.com" },
+      tokenProvider: async (integrationId) => {
+        expect(integrationId).toBe("work-calendar");
+        return "access-token";
+      },
       fetch: fetchCalendar,
     });
 
@@ -54,34 +34,26 @@ describe("Google Calendar integration contract", () => {
       { headers: { Authorization: "Bearer access-token" } },
     );
     expect(pulled).toEqual(source);
-    expect(JSON.parse(await readFile(paths.dataPath, "utf8"))).toEqual(source);
-    expect(formatGoogleCalendar(pulled)).toEqual({
-      events: [
-        {
-          id: "event-1",
-          title: "Planning",
-          start: "2026-08-27T09:00:00-04:00",
-          end: "2026-08-27T10:00:00-04:00",
-        },
-      ],
-    });
   });
 
-  test("preserves the last successful data when a pull fails", async () => {
-    const paths = await calendarFiles();
-    const previous = { items: [{ id: "previous" }] };
-    await writeFile(paths.dataPath, JSON.stringify(previous));
-
+  test("refuses a query with no calendarId", async () => {
     await expect(
       pullGoogleCalendar({
-        ...paths,
+        integrationId: "work-calendar",
+        query: {},
+        tokenProvider: async () => "access-token",
+      }),
+    ).rejects.toThrow("Query is missing a calendarId");
+  });
+
+  test("surfaces a failed fetch", async () => {
+    await expect(
+      pullGoogleCalendar({
+        integrationId: "work-calendar",
+        query: { calendarId: "team" },
         tokenProvider: async () => "access-token",
         fetch: async () => new Response("unavailable", { status: 503 }),
       }),
     ).rejects.toThrow("503");
-
-    expect(JSON.parse(await readFile(paths.dataPath, "utf8"))).toEqual(
-      previous,
-    );
   });
 });

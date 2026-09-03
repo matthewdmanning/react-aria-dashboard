@@ -10,6 +10,7 @@ import {
   messageCard,
   tableCard,
 } from "./index";
+import { CardView } from "./CardView";
 
 describe("included card contract", () => {
   test("displays likely formatted message, table, list, calendar, and chart data", () => {
@@ -56,5 +57,26 @@ describe("included card contract", () => {
       );
       expect(html).toContain(expected);
     }
+  });
+});
+
+describe("CardView", () => {
+  test("renders state through the component its template names", () => {
+    const html = renderToStaticMarkup(
+      createElement(CardView, {
+        template: "message",
+        state: { message: "Ready" },
+      }),
+    );
+
+    expect(html).toContain("Ready");
+  });
+
+  test("says so in place when state does not fit its card template", () => {
+    const html = renderToStaticMarkup(
+      createElement(CardView, { template: "message", state: { wrong: 1 } }),
+    );
+
+    expect(html).toContain("does not fit");
   });
 });

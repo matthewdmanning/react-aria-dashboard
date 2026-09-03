@@ -1,165 +1,287 @@
 import { useState, type FormEvent } from "react";
 
+import type { Mutation, ReadableDashboard, Role, Theme } from "../contract";
 import {
-  parseDashboardConfiguration,
-  type DashboardConfiguration,
-} from "../dashboard";
-
-export type DashboardSettings = Pick<
-  DashboardConfiguration,
-  "integrations" | "theme" | "fontScale" | "agentPermissions"
->;
-
-export async function saveDashboardSettings(
-  configuration: DashboardConfiguration,
-  settings: DashboardSettings,
-  save: (configuration: DashboardConfiguration) => Promise<void>,
-): Promise<DashboardConfiguration> {
-  const next = parseDashboardConfiguration({ ...configuration, ...settings });
-  await save(next);
-  return next;
-}
+  settingsMutations,
+  type DashboardSettings,
+} from "./settings-mutations";
 
 export function Settings({
-  configuration,
-  themes,
+  dashboard,
+  callerRole,
+  connectableTypes,
   onSave,
+  onAuthorize,
 }: {
-  configuration: DashboardConfiguration;
-  themes: string[];
-  onSave: (settings: DashboardSettings) => Promise<void>;
+  dashboard: ReadableDashboard;
+  /** The caller's own role, so a user can see what this session may do. */
+  callerRole?: Role;
+  /** The services this build can connect to (#66) — Settings names none of its own. */
+  connectableTypes: string[];
+  onSave: (mutations: readonly Mutation[]) => Promise<void>;
+  /** Hands a connection's secret to the server. Not a mutation — see `contract`'s ban on a credential-shaped settings key. */
+  onAuthorize: (integrationId: string, credential: string) => Promise<void>;
 }) {
-  const [settings, setSettings] = useState<DashboardSettings>({
-    integrations: configuration.integrations,
-    theme: configuration.theme,
-    fontScale: configuration.fontScale,
-    agentPermissions: configuration.agentPermissions,
+  const initial: DashboardSettings = {
+    dashboard: dashboard.dashboard,
+    integrations: dashboard.integrations,
+    themes: dashboard.themes,
+    fontScale: dashboard.fontScale,
+  };
+  const [settings, setSettings] = useState<DashboardSettings>(initial);
+  const [connection, setConnection] = useState({
+    id: "",
+    type: "",
+    credential: "",
   });
+  const [error, setError] = useState<string>();
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    void onSave(settings);
+    const mutations = settingsMutations(initial, settings);
+    if (mutations.length === 0) return;
+
+    setError(undefined);
+    void onSave(mutations).catch((reason: unknown) => {
+      setError(
+        reason instanceof Error ? reason.message : "Could not save settings",
+      );
+    });
   }
+
+  function connect() {
+    setError(undefined);
+    void (connection.credential === ""
+      ? Promise.resolve()
+      : onAuthorize(connection.id, connection.credential)
+    )
+      .then(() => {
+        setSettings({
+          ...settings,
+          integrations: [
+            ...(settings.integrations ?? []),
+            { id: connection.id, type: connection.type, settings: {} },
+          ],
+        });
+        setConnection({ id: "", type: "", credential: "" });
+      })
+      .catch((reason: unknown) => {
+        setError(
+          reason instanceof Error ? reason.message : "Could not connect",
+        );
+      });
+  }
+
+  function updateTheme(id: string, update: (theme: Theme) => Theme) {
+    setSettings({
+      ...settings,
+      themes: settings.themes?.map((theme) =>
+        theme.id === id ? update(theme) : theme,
+      ),
+    });
+  }
+
+  const selectedTheme = settings.themes?.find(
+    ({ id }) => id === settings.dashboard?.theme,
+  );
 
   return (
     <form aria-label="Settings" onSubmit={submit}>
       <h2>Settings</h2>
-      <label>
-        Theme
-        <select
-          value={settings.theme}
-          onChange={(event) =>
-            setSettings({ ...settings, theme: event.currentTarget.value })
-          }
-        >
-          {themes.map((theme) => (
-            <option key={theme}>{theme}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Font scale
-        <input
-          type="range"
-          min="0.75"
-          max="2"
-          step="0.05"
-          value={settings.fontScale}
-          onChange={(event) =>
-            setSettings({
-              ...settings,
-              fontScale: event.currentTarget.valueAsNumber,
-            })
-          }
-        />
-      </label>
-      <fieldset>
-        <legend>Integrations</legend>
-        {settings.integrations.map((integration) => (
-          <div key={integration.id}>
-            <label>
-              Calendar ID
-              <input
-                value={String(integration.settings.calendarId ?? "")}
-                onChange={(event) =>
-                  setSettings({
-                    ...settings,
-                    integrations: settings.integrations.map((item) =>
-                      item.id === integration.id
-                        ? {
-                            ...item,
-                            settings: {
-                              ...item.settings,
-                              calendarId: event.currentTarget.value,
-                            },
-                          }
-                        : item,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() =>
-                setSettings({
-                  ...settings,
-                  integrations: settings.integrations.filter(
-                    ({ id }) => id !== integration.id,
-                  ),
-                })
-              }
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() =>
-            setSettings({
-              ...settings,
-              integrations: [
-                ...settings.integrations,
-                {
-                  id: `google-calendar-${settings.integrations.length + 1}`,
-                  type: "google-calendar",
-                  settings: { calendarId: "" },
-                },
-              ],
-            })
-          }
-        >
-          Add Google Calendar
-        </button>
-      </fieldset>
-      <fieldset>
-        <legend>Agent permissions</legend>
-        {(["configuration", "data", "cards"] as const).map((permission) => (
-          <label key={permission}>
-            {permission}
+
+      {settings.dashboard && settings.themes ? (
+        <fieldset>
+          <legend>Theme</legend>
+          <label>
+            Selected theme
             <select
-              value={settings.agentPermissions[permission]}
+              value={settings.dashboard.theme}
               onChange={(event) =>
                 setSettings({
                   ...settings,
-                  agentPermissions: {
-                    ...settings.agentPermissions,
-                    [permission]: event.currentTarget.value as
-                      | "none"
-                      | "read"
-                      | "write",
+                  dashboard: settings.dashboard && {
+                    ...settings.dashboard,
+                    theme: event.currentTarget.value,
                   },
                 })
               }
             >
-              <option value="none">None</option>
-              <option value="read">Read</option>
-              <option value="write">Read and write</option>
+              {settings.themes.map((theme) => (
+                <option key={theme.id} value={theme.id}>
+                  {theme.id}
+                </option>
+              ))}
             </select>
           </label>
-        ))}
-      </fieldset>
+          {selectedTheme ? (
+            <label>
+              Density
+              <select
+                value={String(selectedTheme.settings.density ?? "")}
+                onChange={(event) =>
+                  updateTheme(selectedTheme.id, (theme) => ({
+                    ...theme,
+                    settings: {
+                      ...theme.settings,
+                      density: event.currentTarget.value,
+                    },
+                  }))
+                }
+              >
+                <option value="">Default</option>
+                <option value="comfortable">Comfortable</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+          ) : null}
+          {settings.themes.map((theme) => (
+            <div key={theme.id}>
+              <span>{theme.id}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings({
+                    ...settings,
+                    themes: settings.themes?.filter(
+                      ({ id }) => id !== theme.id,
+                    ),
+                  })
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
+
+      {settings.fontScale !== undefined ? (
+        <label>
+          Font scale
+          <input
+            type="range"
+            min="0.75"
+            max="2"
+            step="0.05"
+            value={settings.fontScale}
+            onChange={(event) =>
+              setSettings({
+                ...settings,
+                fontScale: event.currentTarget.valueAsNumber,
+              })
+            }
+          />
+        </label>
+      ) : null}
+
+      {/*
+        Connecting an integration authorizes this dashboard to use an external
+        service. It does not configure what a card shows — that is a card's
+        query. So this panel names the connection and never its fields, and
+        knows no integration type of its own.
+      */}
+      {settings.integrations ? (
+        <fieldset>
+          <legend>Integrations</legend>
+          {settings.integrations.map((integration) => (
+            <div key={integration.id}>
+              <span>{integration.id}</span>
+              <span>{integration.type}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings({
+                    ...settings,
+                    integrations: settings.integrations?.filter(
+                      ({ id }) => id !== integration.id,
+                    ),
+                  })
+                }
+              >
+                Disconnect
+              </button>
+            </div>
+          ))}
+          <label>
+            Name
+            <input
+              value={connection.id}
+              onChange={(event) =>
+                setConnection({ ...connection, id: event.currentTarget.value })
+              }
+            />
+          </label>
+          <label>
+            Service
+            <select
+              value={connection.type}
+              onChange={(event) =>
+                setConnection({
+                  ...connection,
+                  type: event.currentTarget.value,
+                })
+              }
+            >
+              <option value="">Select a service</option>
+              {connectableTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Credential
+            <input
+              type="password"
+              value={connection.credential}
+              onChange={(event) =>
+                setConnection({
+                  ...connection,
+                  credential: event.currentTarget.value,
+                })
+              }
+            />
+          </label>
+          <button
+            type="button"
+            disabled={connection.id === "" || connection.type === ""}
+            onClick={connect}
+          >
+            Connect
+          </button>
+        </fieldset>
+      ) : null}
+
+      {callerRole ? (
+        <fieldset>
+          <legend>Your role</legend>
+          <h3>{callerRole.name}</h3>
+          {Object.entries(callerRole.permissions).map(([category, level]) => (
+            <p key={category}>
+              {category}: {level}
+            </p>
+          ))}
+        </fieldset>
+      ) : null}
+
+      {dashboard.roles ? (
+        <fieldset>
+          <legend>Roles</legend>
+          {dashboard.roles.map((role) => (
+            <div key={role.name}>
+              <h3>{role.name}</h3>
+              {Object.entries(role.permissions).map(([category, level]) => (
+                <p key={category}>
+                  {category}: {level}
+                </p>
+              ))}
+            </div>
+          ))}
+        </fieldset>
+      ) : null}
+
+      {error ? <p role="alert">{error}</p> : null}
       <button type="submit">Save settings</button>
     </form>
   );

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  integrationSchema,
   compileFormatterSpec,
   mutationSchema,
   parseDashboardConfiguration,
@@ -17,9 +18,7 @@ const configuration: DashboardConfiguration = {
     },
   ],
   themes: [{ id: "calm", settings: { density: "comfortable" } }],
-  dashboards: [
-    { id: "home", cards: ["first", "second"], theme: "calm" },
-  ],
+  dashboard: { id: "home", cards: ["first", "second"], theme: "calm" },
   fontScale: 1.1,
   roles: [
     {
@@ -84,20 +83,55 @@ describe("dashboard contract", () => {
     expect(() =>
       parseDashboardConfiguration({
         ...configuration,
-        dashboards: [{ id: "home", cards: ["missing"], theme: "calm" }],
+        dashboard: { id: "home", cards: ["missing"], theme: "calm" },
       }),
     ).toThrow("unknown card");
   });
 
-  test("tags mutations with the permission category they require", () => {
-    expect(
-      mutationSchema.parse({
-        type: "patch-card-state",
-        permission: "data",
-        cardId: "first",
-        patch: { message: "Updated" },
+  test("rejects card state that does not fit its card template", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        cards: [
+          { ...configuration.cards[0], state: { message: 42 } },
+          configuration.cards[1],
+        ],
       }),
-    ).toMatchObject({ type: "patch-card-state", permission: "data" });
+    ).toThrow("does not fit card template 'message'");
+  });
+
+  test("rejects a card naming an unknown card template", () => {
+    expect(() =>
+      parseDashboardConfiguration({
+        ...configuration,
+        cards: [
+          { ...configuration.cards[0], template: "nonexistent" },
+          configuration.cards[1],
+        ],
+      }),
+    ).toThrow();
+  });
+});
+
+describe("integration settings", () => {
+  test("refuse a credential-shaped key, whatever it is called", () => {
+    for (const key of ["apiKey", "access_token", "clientSecret", "password"]) {
+      expect(() =>
+        integrationSchema.parse({
+          id: "connection",
+          type: "example-service",
+          settings: { [key]: "value" },
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      integrationSchema.parse({
+        id: "connection",
+        type: "example-service",
+        settings: { region: "eu" },
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -111,9 +145,9 @@ describe("compileFormatterSpec", () => {
       },
     };
 
-    expect(compileFormatterSpec(spec)({ summary: "Standup", temp: 72 })).toEqual(
-      { title: "Standup", temperature: "72" },
-    );
+    expect(
+      compileFormatterSpec(spec)({ summary: "Standup", temp: 72 }),
+    ).toEqual({ title: "Standup", temperature: "72" });
   });
 
   test("maps arrays and substitutes the item index in defaults", () => {

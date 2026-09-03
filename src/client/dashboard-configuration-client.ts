@@ -1,29 +1,40 @@
 import {
-  parseDashboardConfiguration,
-  type DashboardConfiguration,
-} from "../dashboard";
+  readableDashboardSchema,
+  roleSchema,
+  type Mutation,
+  type ReadableDashboard,
+  type Role,
+} from "../contract";
+import { failureFrom } from "./request";
 
 const endpoint = "/api/dashboard-configuration";
 
-export async function loadDashboardConfiguration(): Promise<DashboardConfiguration> {
-  const response = await fetch(endpoint);
-  if (!response.ok) throw new Error("Could not load dashboard configuration");
-  return parseDashboardConfiguration(await response.json());
+/**
+ * Returns the categories this caller may read. Denied categories are absent
+ * rather than empty, so the caller can tell "not permitted" from "none exist".
+ */
+export async function loadReadableDashboard(): Promise<ReadableDashboard> {
+  const response = await fetch(`${endpoint}?scope=all`);
+  if (!response.ok) throw await failureFrom(response);
+  return readableDashboardSchema.parse(await response.json());
 }
 
-export async function saveDashboardConfiguration(
-  configuration: DashboardConfiguration,
-): Promise<void> {
+/** Returns the same projection `loadReadableDashboard` does — see its note. */
+export async function applyDashboardMutations(
+  mutations: readonly Mutation[],
+): Promise<ReadableDashboard> {
   const response = await fetch(endpoint, {
-    method: "PUT",
+    method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(configuration),
+    body: JSON.stringify(mutations),
   });
-  if (!response.ok) throw new Error("Could not save dashboard configuration");
+  if (!response.ok) throw await failureFrom(response);
+  return readableDashboardSchema.parse(await response.json());
 }
 
-export async function loadSources(): Promise<Record<string, unknown>> {
-  const response = await fetch("/api/sources");
-  if (!response.ok) throw new Error("Could not load dashboard sources");
-  return (await response.json()) as Record<string, unknown>;
+/** The caller's own role. Not gated — a caller may always see what it may do. */
+export async function loadCallerRole(): Promise<Role> {
+  const response = await fetch(`${endpoint}?scope=role`);
+  if (!response.ok) throw await failureFrom(response);
+  return roleSchema.parse(await response.json());
 }

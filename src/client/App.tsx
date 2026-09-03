@@ -1,100 +1,178 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
+import type { Mutation, ReadableDashboard, Role } from "../contract";
 import {
-  compileFormatterSpec,
-  renderDashboard,
-  type DashboardConfiguration,
-} from "../dashboard";
-import {
-  loadDashboardConfiguration,
-  loadSources,
-  saveDashboardConfiguration,
+  applyDashboardMutations,
+  loadCallerRole,
+  loadReadableDashboard,
 } from "./dashboard-configuration-client";
 import {
-  loadGoogleCalendarSource,
-  refreshGoogleCalendar,
-} from "./google-calendar-client";
-import { formatIdentity } from "./formatters/identity";
-import { formatMessage } from "./formatters/message";
-import { includedCardTemplates } from "./cards";
-import { saveDashboardSettings, Settings } from "./Settings";
-import { formatGoogleCalendar } from "./formatters/google-calendar";
+  authorizeIntegration,
+  loadConnectableIntegrationTypes,
+  refreshIntegrations,
+} from "./integrations-client";
+import { CardView } from "./cards/CardView";
+import {
+  enqueue,
+  pendingMutationCount,
+  readCachedDashboard,
+  replayQueue,
+  requiresLiveService,
+  writeCachedDashboard,
+} from "./offline";
+import { RequestFailure } from "./request";
+import { Settings } from "./Settings";
+
+function renderDashboard({ dashboard, cards, fontScale }: ReadableDashboard) {
+  if (!dashboard || !cards) {
+    return <p>You do not have permission to view this dashboard.</p>;
+  }
+
+  const byId = new Map(cards.map((card) => [card.id, card]));
+
+  return (
+    <main
+      data-theme={dashboard.theme}
+      style={{ fontSize: `${fontScale ?? 1}rem` }}
+    >
+      {dashboard.cards.map((cardId) => {
+        const card = byId.get(cardId);
+        if (!card) return null;
+        return (
+          <section key={card.id}>
+            <h2>{card.title}</h2>
+            <CardView template={card.template} state={card.state} />
+          </section>
+        );
+      })}
+    </main>
+  );
+}
 
 export function App() {
-  const [configuration, setConfiguration] = useState<DashboardConfiguration>();
-  const [sources, setSources] = useState<Record<string, unknown>>();
-  const [calendarSource, setCalendarSource] = useState<unknown>();
-  const [calendarError, setCalendarError] = useState<string>();
-
-  useEffect(() => {
-    void loadDashboardConfiguration().then(setConfiguration);
-    void loadSources().then(setSources);
-    void loadGoogleCalendarSource()
-      .then(setCalendarSource)
-      .catch((error: unknown) => {
-        setCalendarError(
-          error instanceof Error ? error.message : "Calendar unavailable",
-        );
-      });
-  }, []);
-
-  const formatters = useMemo(
-    () => ({
-      identity: formatIdentity,
-      message: formatMessage,
-      "google-calendar": formatGoogleCalendar,
-      ...Object.fromEntries(
-        Object.entries(configuration?.formatterSpecs ?? {}).map(
-          ([id, spec]) => [id, compileFormatterSpec(spec)],
-        ),
-      ),
-    }),
-    [configuration?.formatterSpecs],
+  const [dashboard, setDashboard] = useState<ReadableDashboard>();
+  const [callerRole, setCallerRole] = useState<Role>();
+  const [error, setError] = useState<string>();
+  const [refreshError, setRefreshError] = useState<string>();
+  const [offline, setOffline] = useState(false);
+  const [connectableTypes, setConnectableTypes] = useState<string[]>([]);
+  const [pendingCount, setPendingCount] = useState(
+    pendingMutationCount(localStorage),
   );
 
-  if (!configuration || !sources) return <p>Loading dashboard…</p>;
+  async function sync(): Promise<void> {
+    const { dropped } = await replayQueue(localStorage, applyDashboardMutations);
+    setPendingCount(pendingMutationCount(localStorage));
+    if (dropped.length > 0) {
+      setRefreshError(dropped.map((failure) => failure.message).join(", "));
+    }
+  }
+
+  useEffect(() => {
+    void loadReadableDashboard()
+      .then((loaded) => {
+        setDashboard(loaded);
+        setOffline(false);
+        writeCachedDashboard(localStorage, loaded);
+        return sync();
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof RequestFailure) {
+          setError(reason.message);
+          return;
+        }
+        const cached = readCachedDashboard(localStorage);
+        if (!cached) {
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load dashboard",
+          );
+          return;
+        }
+        setDashboard(cached);
+        setOffline(true);
+      });
+    void loadCallerRole().then(setCallerRole);
+    void loadConnectableIntegrationTypes()
+      .then(setConnectableTypes)
+      .catch(() => undefined);
+
+    const handleOnline = () => void sync().then(() => setOffline(false));
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
+
+  async function saveMutations(mutations: readonly Mutation[]): Promise<void> {
+    try {
+      const result = await applyDashboardMutations(mutations);
+      setDashboard(result);
+      writeCachedDashboard(localStorage, result);
+      setOffline(false);
+    } catch (reason) {
+      // `integrations` mutations require a live service (D15) and are never
+      // queued — the caller sees this failure directly.
+      if (reason instanceof RequestFailure || requiresLiveService(mutations)) {
+        throw reason;
+      }
+      enqueue(localStorage, mutations);
+      setPendingCount(pendingMutationCount(localStorage));
+      setOffline(true);
+    }
+  }
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!dashboard) return <p>Loading dashboard…</p>;
 
   return (
     <>
-      {renderDashboard(configuration, {
-        cardTemplates: includedCardTemplates,
-        sources: { ...sources, "google-calendar": calendarSource },
-        formatters,
-      })}
-      <section aria-label="Google Calendar controls">
+      {offline ? (
+        <p role="status">
+          Offline — {pendingCount} change{pendingCount === 1 ? "" : "s"}{" "}
+          pending
+        </p>
+      ) : null}
+      {renderDashboard(dashboard)}
+      <section aria-label="Integrations">
         <button
           type="button"
-          onClick={() =>
-            void refreshGoogleCalendar()
-              .then(setCalendarSource)
-              .then(() => setCalendarError(undefined))
-              .catch((error: unknown) =>
-                setCalendarError(
-                  error instanceof Error
-                    ? error.message
-                    : "Calendar refresh failed",
+          onClick={() => {
+            setRefreshError(undefined);
+            void refreshIntegrations()
+              .then((refreshes) => {
+                const failed = refreshes.filter(
+                  ({ status }) => status === "failed",
+                );
+                if (failed.length > 0) {
+                  setRefreshError(
+                    failed
+                      .map(
+                        ({ cardId, message }) =>
+                          `${cardId}: ${message ?? "failed"}`,
+                      )
+                      .join(", "),
+                  );
+                }
+              })
+              .catch((reason: unknown) =>
+                setRefreshError(
+                  reason instanceof Error ? reason.message : "Refresh failed",
                 ),
-              )
-          }
+              );
+          }}
         >
-          Refresh Google Calendar
+          Refresh
         </button>
-        {calendarError ? <p role="alert">{calendarError}</p> : null}
+        {refreshError ? <p role="alert">{refreshError}</p> : null}
       </section>
       <details>
         <summary>Settings</summary>
         <Settings
-          configuration={configuration}
-          themes={["calm", "contrast"]}
-          onSave={async (settings) =>
-            setConfiguration(
-              await saveDashboardSettings(
-                configuration,
-                settings,
-                saveDashboardConfiguration,
-              ),
-            )
-          }
+          dashboard={dashboard}
+          callerRole={callerRole}
+          connectableTypes={connectableTypes}
+          onSave={saveMutations}
+          onAuthorize={authorizeIntegration}
         />
       </details>
     </>
