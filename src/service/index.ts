@@ -32,7 +32,8 @@ export type ServiceFailureCode =
   | "unknown-id"
   | "duplicate-id"
   | "in-use"
-  | "credentials-unavailable";
+  | "credentials-unavailable"
+  | "not-implemented";
 
 export class ServiceFailure extends Error {
   constructor(
@@ -503,6 +504,13 @@ function applyMutation(
       );
       return;
     }
+    case "assemble-card-template":
+      // Schema and permission gate land here (#74); assembling the
+      // composition tree into a real component is a separate ticket.
+      throw new ServiceFailure(
+        "not-implemented",
+        "assemble-card-template is not yet implemented",
+      );
   }
 }
 

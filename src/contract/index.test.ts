@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  compositionNodeSchema,
   integrationSchema,
   compileFormatterSpec,
   mutationSchema,
@@ -110,6 +111,48 @@ describe("dashboard contract", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("compositionNodeSchema", () => {
+  test("parses a recursive tree naming any component and props", () => {
+    expect(
+      compositionNodeSchema.parse({
+        component: "GridList",
+        props: { "aria-label": "Do" },
+        children: [
+          {
+            component: "GridListItem",
+            props: { textValue: "Fix outage" },
+            children: [],
+          },
+        ],
+      }),
+    ).toEqual({
+      component: "GridList",
+      props: { "aria-label": "Do" },
+      children: [
+        { component: "GridListItem", props: { textValue: "Fix outage" }, children: [] },
+      ],
+    });
+  });
+
+  test("rejects a node missing the structural shape", () => {
+    expect(() =>
+      compositionNodeSchema.parse({ component: "Text" }),
+    ).toThrow();
+  });
+});
+
+describe("assemble-card-template mutation", () => {
+  test("parses given a composition tree", () => {
+    expect(
+      mutationSchema.parse({
+        type: "assemble-card-template",
+        template: "eisenhower",
+        composition: { component: "Flex", props: {}, children: [] },
+      }),
+    ).toMatchObject({ type: "assemble-card-template" });
   });
 });
 

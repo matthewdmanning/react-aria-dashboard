@@ -103,6 +103,27 @@ export const formatterSpecSchema = z.discriminatedUnion("shape", [
 export type FormatterSpec = z.infer<typeof formatterSpecSchema>;
 type FieldSpec = z.infer<typeof fieldSpecSchema>;
 
+/**
+ * A card template's component as data (D22): a tree of real
+ * `react-aria-components` exports the service can turn into real source.
+ * Structural only — no enum of component names, no per-component prop
+ * schema (an earlier draft duplicated the library's own types and drifted;
+ * `tsc --noEmit` on the assembled output is the correctness check, not this
+ * schema). Same reasoning as `formatterSpecSchema`: closed on shape, open
+ * on domain fields.
+ */
+export interface CompositionNode {
+  component: string;
+  props: Record<string, unknown>;
+  children: CompositionNode[];
+}
+
+export const compositionNodeSchema: z.ZodType<CompositionNode> = z.object({
+  component: z.string().min(1),
+  props: z.record(z.string(), z.unknown()),
+  children: z.array(z.lazy(() => compositionNodeSchema)),
+});
+
 export const querySchema = z
   .object({
     integration: z.string().min(1),
@@ -253,6 +274,24 @@ const removeThemeMutationSchema = z
   })
   .strict();
 
+/**
+ * D22's one card-template capability the service has: assemble a template's
+ * component from a composition tree. An ordinary mutation, not a separate
+ * operation like `authorize` — `authorize` is separate because it writes to
+ * a store `apply` never touches (a credential, outside
+ * `DashboardConfiguration`); this produces a card template, which (like
+ * every other mutation) is gated by `mutationRequirements` and applied
+ * through the same pipeline. Assembling the tree into real component source
+ * is service-side work, out of scope here (#74).
+ */
+const assembleCardTemplateMutationSchema = z
+  .object({
+    type: z.literal("assemble-card-template"),
+    template: z.string().min(1),
+    composition: compositionNodeSchema,
+  })
+  .strict();
+
 export const mutationSchema = z.discriminatedUnion("type", [
   cardStateMutationSchema,
   addCardMutationSchema,
@@ -267,6 +306,7 @@ export const mutationSchema = z.discriminatedUnion("type", [
   addIntegrationMutationSchema,
   editIntegrationMutationSchema,
   removeIntegrationMutationSchema,
+  assembleCardTemplateMutationSchema,
 ]);
 
 export type Mutation = z.infer<typeof mutationSchema>;
@@ -297,6 +337,7 @@ export const mutationRequirements = {
   "add-integration": { category: "integrations", level: "write" },
   "edit-integration": { category: "integrations", level: "edit" },
   "remove-integration": { category: "integrations", level: "write" },
+  "assemble-card-template": { category: "cards", level: "write" },
 } as const satisfies Record<Mutation["type"], MutationRequirement>;
 
 export const defaultDashboardConfiguration: DashboardConfiguration = {

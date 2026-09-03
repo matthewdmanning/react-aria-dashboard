@@ -73,6 +73,7 @@ const failureStatus: Record<ServiceFailureCode, number> = {
   "duplicate-id": 409,
   "in-use": 409,
   "credentials-unavailable": 500,
+  "not-implemented": 501,
 };
 
 function failureResponse(error: unknown): Response {
