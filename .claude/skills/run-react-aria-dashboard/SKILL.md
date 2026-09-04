@@ -13,6 +13,12 @@ tool protocol. The driver is a small TypeScript client
 spawns the real server (`src/mcp/index.ts`) over stdio, and sends it tool
 calls — the same path a real MCP-connected agent takes.
 
+A running dashboard's HTTP server (`src/server`) separately serves its
+wired-in card templates as a shadcn-compatible registry at
+`/r/registry.json` and `/r/<name>.json` (D24) — a non-MCP surface for
+shadcn-aware clients (`shadcn search/view/add`) to discover and pull
+templates from a live dashboard. See `src/server/registry.ts`.
+
 ## Prerequisites
 
 None beyond the repo's own `node_modules` (already installed: `npm install`

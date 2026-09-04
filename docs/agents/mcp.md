@@ -26,8 +26,9 @@ The write tools correspond to the contract mutations:
 - `patch-card-state`
 - `add-card`, `edit-card`, `remove-card`
 - `insert-card`, `edit-dashboard`
+- `assemble-card-template`
 - `add-theme`, `edit-theme`, `remove-theme`, `set-font-scale`
-- `add-integration`, `edit-integration`, `remove-integration`
+- `add-integration`, `edit-integration`, `remove-integration`, `authorize-integration`
 
 The service validates each mutation and enforces the required permission level.
 MCP does not read or write data files, refresh integrations, perform path

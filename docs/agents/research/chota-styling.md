@@ -1,5 +1,9 @@
 # Research: Chota CSS as a global stylesheet under React Aria Components
 
+> **Superseded by D23.** The dashboard's declared component library is now shadcn/ui, not
+> chota — chota was removed from the codebase. Kept as a historical record of the original
+> D23 decision; nothing below reflects the current styling stack.
+
 No existing `research/` or `docs/research/` convention was found in this repo, so this note
 lives at `docs/agents/research/chota-styling.md` alongside the other `docs/agents/*.md` notes.
 
