@@ -7,13 +7,17 @@ import { randomUUID } from "node:crypto";
 const execFileAsync = promisify(execFile);
 
 import type { AuthStore } from "../auth";
+import { isLocalUserToken } from "../auth/local-user";
 import type { CredentialStore } from "../server/integrations/credentials";
 import { generateComponentSource } from "../card-templates/codegen";
 import {
   defaultDashboardConfiguration,
+  localUserRole,
   mutationRequirements,
+  noPermissionsRole,
   mutationsSchema,
   parseDashboardConfiguration,
+  roles,
   type Card,
   type Dashboard,
   type DashboardConfiguration,
@@ -58,7 +62,7 @@ export interface DashboardPersistence {
 
 /** What `read` returns for each scope. `all` omits categories the role cannot read. */
 export interface ReadScopes {
-  all: Partial<DashboardConfiguration>;
+  all: ReadableConfiguration;
   /** The caller's own resolved role. Never gated — a caller may always see what it may do. */
   role: Role;
   data: { id: string; state: unknown }[];
@@ -74,6 +78,14 @@ export interface ReadScopes {
 
 export type ReadScope = keyof ReadScopes;
 
+/**
+ * What `read("all")` returns. Roles are not part of dashboard configuration
+ * (D35) — they come from the roles file — so they ride alongside it here.
+ */
+export type ReadableConfiguration = Partial<DashboardConfiguration> & {
+  roles?: Role[];
+};
+
 interface Dependencies {
   persistence: DashboardPersistence;
   authStore?: AuthStore;
@@ -81,6 +93,20 @@ interface Dependencies {
   credentials?: CredentialStore;
   /** The service types this build can pull from — how a caller learns what may be connected. */
   connectableTypes?: readonly string[];
+  /**
+   * The roles file (D35). Defaults to the one `contract` imports; overridden
+   * only by tests, since configuring roles means editing that file.
+   */
+  roles?: readonly Role[];
+  /** What a caller proving it is the local user resolves to. Defaults to `localUserRole` (D35). */
+  localUserRole?: Role;
+  /**
+   * The local-user token this process provisioned (`src/auth/local-user.ts`).
+   * When set, only a caller presenting it is the local user and an unproven
+   * caller gets nothing. When unset — tests, and a build with no server door —
+   * an unproven caller is treated as local.
+   */
+  localUserToken?: string;
 }
 
 export interface DashboardService {
@@ -183,28 +209,39 @@ async function readConfiguration(
 
 async function resolveRole(
   dependencies: Dependencies,
-  configuration: DashboardConfiguration,
   credential: string | undefined,
 ): Promise<Role> {
-  let roleName = "local";
+  const asLocalUser = dependencies.localUserRole ?? localUserRole;
 
-  if (credential !== undefined) {
-    if (!dependencies.authStore) {
-      throw new ServiceFailure(
-        "authentication-unavailable",
-        "Authentication is not configured",
-      );
-    }
-    const account = await dependencies.authStore.resolve(credential);
-    if (!account) {
-      throw new ServiceFailure("unknown-credential", "Unknown credential");
-    }
-    roleName = account.role;
+  // The local user proves itself with the token only that OS account can read.
+  if (isLocalUserToken(credential, dependencies.localUserToken)) {
+    return asLocalUser;
   }
 
-  const role = configuration.roles.find(({ name }) => name === roleName);
+  if (credential === undefined) {
+    // With a token provisioned, proving nothing gets nothing. Without one
+    // there is no door to prove anything at, so the caller is the local user.
+    return dependencies.localUserToken === undefined
+      ? asLocalUser
+      : noPermissionsRole;
+  }
+
+  if (!dependencies.authStore) {
+    throw new ServiceFailure(
+      "authentication-unavailable",
+      "Authentication is not configured",
+    );
+  }
+  const account = await dependencies.authStore.resolve(credential);
+  if (!account) {
+    throw new ServiceFailure("unknown-credential", "Unknown credential");
+  }
+
+  const role = (dependencies.roles ?? roles).find(
+    ({ name }) => name === account.role,
+  );
   if (!role) {
-    throw new ServiceFailure("unknown-role", `Unknown role: ${roleName}`);
+    throw new ServiceFailure("unknown-role", `Unknown role: ${account.role}`);
   }
   return role;
 }
@@ -215,14 +252,14 @@ async function readState<Scope extends ReadScope>(
   credential: string | undefined,
 ): Promise<ReadScopes[Scope]> {
   const configuration = await readConfiguration(dependencies.persistence);
-  const role = await resolveRole(dependencies, configuration, credential);
+  const role = await resolveRole(dependencies, credential);
 
   if (scope !== "all" && scope !== "role") requireRead(role, scope);
 
   // Built per scope, not all at once: `all` refuses a role that may read
   // nothing, which must not decide the answer for a scope nobody asked for.
   const scoped: { [Scope in ReadScope]: () => ReadScopes[Scope] } = {
-    all: () => projectReadable(configuration, role),
+    all: () => projectReadable(configuration, role, dependencies.roles ?? roles),
     role: () => role,
     data: () => configuration.cards.map(({ id, state }) => ({ id, state })),
     cards: () => configuration.cards,
@@ -232,7 +269,7 @@ async function readState<Scope extends ReadScope>(
       fontScale: configuration.fontScale,
     }),
     integrations: () => configuration.integrations,
-    roles: () => configuration.roles,
+    roles: () => [...(dependencies.roles ?? roles)],
   };
 
   return scoped[scope]();
@@ -252,9 +289,10 @@ async function readState<Scope extends ReadScope>(
 function projectReadable(
   configuration: DashboardConfiguration,
   role: Role,
+  availableRoles: readonly Role[],
   { allowEmpty = false }: { allowEmpty?: boolean } = {},
-): Partial<DashboardConfiguration> {
-  const readable: Partial<DashboardConfiguration> = {};
+): ReadableConfiguration {
+  const readable: ReadableConfiguration = {};
 
   // ponytail: `data` adds nothing past `cards`; split them if a role ever needs
   // card state without the cards themselves.
@@ -269,7 +307,7 @@ function projectReadable(
   if (role.permissions.integrations !== "none") {
     readable.integrations = configuration.integrations;
   }
-  if (role.permissions.roles !== "none") readable.roles = configuration.roles;
+  if (role.permissions.roles !== "none") readable.roles = [...availableRoles];
 
   if (Object.keys(readable).length === 0 && !allowEmpty) {
     throw new ServiceFailure("permission-denied", "Permission denied: read");
@@ -284,7 +322,7 @@ async function applyMutations(
 ): Promise<ReadScopes["all"]> {
   const mutations = mutationsSchema.parse(input);
   const configuration = await readConfiguration(dependencies.persistence);
-  const role = await resolveRole(dependencies, configuration, credential);
+  const role = await resolveRole(dependencies, credential);
 
   for (const mutation of mutations) {
     const { category, level } = mutationRequirements[mutation.type];
@@ -353,7 +391,9 @@ async function applyMutations(
     );
   }
 
-  return projectReadable(next, role, { allowEmpty: true });
+  return projectReadable(next, role, dependencies.roles ?? roles, {
+    allowEmpty: true,
+  });
 }
 
 async function authorizeConnection(
@@ -363,7 +403,7 @@ async function authorizeConnection(
   credential: string | undefined,
 ): Promise<void> {
   const configuration = await readConfiguration(dependencies.persistence);
-  const role = await resolveRole(dependencies, configuration, credential);
+  const role = await resolveRole(dependencies, credential);
   requireLevel(role, "integrations", "edit");
 
   if (!configuration.integrations.some(({ id }) => id === connectionId)) {
@@ -387,7 +427,7 @@ async function readConnectableTypes(
   credential: string | undefined,
 ): Promise<string[]> {
   const configuration = await readConfiguration(dependencies.persistence);
-  const role = await resolveRole(dependencies, configuration, credential);
+  const role = await resolveRole(dependencies, credential);
   requireRead(role, "integrations");
   return [...(dependencies.connectableTypes ?? [])];
 }

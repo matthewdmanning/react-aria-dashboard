@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { defaultDashboardConfiguration } from "../contract";
+import { defaultDashboardConfiguration, roles, type Role } from "../contract";
 import {
   createService,
   type DashboardPersistence,
@@ -41,7 +41,11 @@ function createMemoryCredentialStore(): CredentialStore {
 
 function createTestService(
   initial = defaultDashboardConfiguration,
-  extra: { credentials?: CredentialStore; connectableTypes?: string[] } = {},
+  extra: {
+    credentials?: CredentialStore;
+    connectableTypes?: string[];
+    localUserRole?: Role;
+  } = {},
 ): DashboardService {
   return createService({
     persistence: createMemoryPersistence(initial),
@@ -63,6 +67,7 @@ describe("dashboard service HTTP transport", () => {
       themes: defaultDashboardConfiguration.themes,
       fontScale: defaultDashboardConfiguration.fontScale,
       integrations: defaultDashboardConfiguration.integrations,
+      roles,
     });
   });
 
@@ -88,7 +93,18 @@ describe("dashboard service HTTP transport", () => {
   test("returns service permission errors without a second authorization check", async () => {
     const response = await handleDashboardConfigurationRequest(
       new Request("http://dashboard/api/dashboard-configuration?scope=roles"),
-      createTestService(),
+      createTestService(defaultDashboardConfiguration, {
+        localUserRole: {
+        name: "local user",
+        permissions: {
+          data: "write",
+          cards: "write",
+          presentation: "write",
+          integrations: "write",
+          roles: "none",
+        },
+      },
+      }),
     );
 
     expect(response.status).toBe(403);
@@ -277,24 +293,19 @@ describe("integration types endpoint", () => {
   });
 
   test("resolves a role like every other request, refusing a caller with no integrations access", async () => {
-    const service = createTestService(
-      {
-        ...defaultDashboardConfiguration,
-        roles: [
-          {
-            name: "local",
-            permissions: {
-              data: "write",
-              cards: "write",
-              presentation: "write",
-              integrations: "none",
-              roles: "none",
-            },
-          },
-        ],
+    const service = createTestService(defaultDashboardConfiguration, {
+      connectableTypes: ["google-calendar"],
+      localUserRole: {
+        name: "local user",
+        permissions: {
+          data: "write",
+          cards: "write",
+          presentation: "write",
+          integrations: "none",
+          roles: "none",
+        },
       },
-      { connectableTypes: ["google-calendar"] },
-    );
+    });
 
     const response = await handleIntegrationTypesRequest(
       new Request("http://dashboard/api/integrations/types"),
@@ -342,24 +353,19 @@ describe("integration authorization endpoint", () => {
 
   test("refuses a caller without integrations: edit", async () => {
     const credentials = createMemoryCredentialStore();
-    const service = createTestService(
-      {
-        ...defaultDashboardConfiguration,
-        roles: [
-          {
-            name: "local",
-            permissions: {
-              data: "write",
-              cards: "write",
-              presentation: "write",
-              integrations: "read",
-              roles: "none",
-            },
-          },
-        ],
+    const service = createTestService(defaultDashboardConfiguration, {
+      credentials,
+      localUserRole: {
+        name: "local user",
+        permissions: {
+          data: "write",
+          cards: "write",
+          presentation: "write",
+          integrations: "read",
+          roles: "none",
+        },
       },
-      { credentials },
-    );
+    });
 
     const response = await handleIntegrationAuthorizeRequest(
       new Request("http://dashboard/api/integrations/authorize", {

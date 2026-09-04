@@ -59,6 +59,9 @@ describe("generateComponentSource", () => {
     expect(generateComponentSource(tree)).toBe(generateComponentSource(tree));
   });
 
+  // Spawns a real `tsc` — around four seconds alone, and longer sharing a
+  // machine with the assembly tests, which spawn their own. Well past vitest's
+  // five-second default, so it names its own.
   it("produces source that type-checks against react-aria-components' real types", () => {
     const tree: CompositionNode = {
       component: "GridList",
@@ -93,5 +96,5 @@ describe("generateComponentSource", () => {
     } finally {
       unlinkSync(file);
     }
-  });
+  }, 60_000);
 });

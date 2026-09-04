@@ -6,6 +6,7 @@ import { describe, expect, test } from "vitest";
 import {
   defaultDashboardConfiguration,
   type DashboardConfiguration,
+  type Role,
 } from "../contract";
 import {
   createService,
@@ -42,7 +43,11 @@ function createMemoryCredentialStore(): CredentialStore {
 
 function createTestService(
   initial: DashboardConfiguration = defaultDashboardConfiguration,
-  extra: { credentials?: CredentialStore; connectableTypes?: string[] } = {},
+  extra: {
+    credentials?: CredentialStore;
+    connectableTypes?: string[];
+    localUserRole?: Role;
+  } = {},
 ): DashboardService {
   return createService({
     persistence: createMemoryPersistence(initial),
@@ -132,8 +137,21 @@ describe("dashboard MCP server", () => {
   });
 
   test("a denied read surfaces as an MCP error carrying the service's failure code", async () => {
-    // The default `local` role has `roles: none`.
-    const client = await connectClient(createTestService());
+    // This caller's role has `roles: none`.
+    const client = await connectClient(
+      createTestService(defaultDashboardConfiguration, {
+        localUserRole: {
+          name: "local user",
+          permissions: {
+            data: "write",
+            cards: "write",
+            presentation: "write",
+            integrations: "write",
+            roles: "none",
+          },
+        },
+      }),
+    );
 
     const result = await client.callTool({
       name: "read-dashboard",
@@ -147,11 +165,10 @@ describe("dashboard MCP server", () => {
   });
 
   test("a denied apply surfaces as an MCP error carrying the service's failure code", async () => {
-    const restricted: DashboardConfiguration = {
-      ...structuredClone(defaultDashboardConfiguration),
-      roles: [
-        {
-          name: "local",
+    const client = await connectClient(
+      createTestService(defaultDashboardConfiguration, {
+        localUserRole: {
+          name: "local user",
           permissions: {
             data: "read",
             cards: "read",
@@ -160,9 +177,8 @@ describe("dashboard MCP server", () => {
             roles: "none",
           },
         },
-      ],
-    };
-    const client = await connectClient(createTestService(restricted));
+      }),
+    );
 
     const result = await client.callTool({
       name: "set-font-scale",
@@ -262,11 +278,11 @@ describe("integration authorization through MCP", () => {
 
   test("a role below integrations: edit is refused, the same as through HTTP", async () => {
     const credentials = createMemoryCredentialStore();
-    const restricted: DashboardConfiguration = {
-      ...structuredClone(defaultDashboardConfiguration),
-      roles: [
-        {
-          name: "local",
+    const client = await connectClient(
+      createTestService(defaultDashboardConfiguration, {
+        credentials,
+        localUserRole: {
+          name: "local user",
           permissions: {
             data: "write",
             cards: "write",
@@ -275,10 +291,7 @@ describe("integration authorization through MCP", () => {
             roles: "none",
           },
         },
-      ],
-    };
-    const client = await connectClient(
-      createTestService(restricted, { credentials }),
+      }),
     );
 
     const result = await client.callTool({

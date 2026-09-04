@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { createServer as createViteServer } from "vite";
 
 import { createFileAuthStore } from "../auth";
+import { provisionLocalUserToken } from "../auth/local-user";
 import type { Mutation } from "../contract";
 import {
   createFilePersistence,
@@ -222,12 +223,19 @@ async function startServer() {
   const credentialsPath =
     process.env.DASHBOARD_INTEGRATION_CREDENTIALS_PATH ??
     join(workspace, ".dashboard", "integration-credentials.json");
+  const localUserTokenPath =
+    process.env.DASHBOARD_LOCAL_USER_TOKEN_PATH ??
+    join(workspace, ".dashboard", "local-user-token");
+  // Loopback proves same machine, not same user (D35). The token file does —
+  // only the OS account running this process can read it.
+  const localUserToken = await provisionLocalUserToken(localUserTokenPath);
   const credentials = createFileCredentialStore(credentialsPath);
   const service = createService({
     persistence: createFilePersistence(dashboardPath),
     authStore: createFileAuthStore(authStorePath),
     credentials,
     connectableTypes: Object.keys(integrationPulls),
+    localUserToken,
   });
   // Internal plumbing for the server's own outbound calls, not a caller-facing
   // operation -- reads the same store `service` composes, directly.
@@ -346,7 +354,15 @@ async function startServer() {
     vite.middlewares(request, response, () => undefined);
   });
 
-  server.listen(Number(process.env.PORT ?? 5173), "127.0.0.1");
+  const port = Number(process.env.PORT ?? 5173);
+  server.listen(port, "127.0.0.1");
+  // Printed, not served: whoever can read this process's stdout is the OS user
+  // running it. Another account on the same host can reach the port but never
+  // sees this line, and the page it would load carries no token.
+  process.stdout.write(
+    `Dashboard: http://127.0.0.1:${port}/?token=${localUserToken}
+`,
+  );
 }
 
 function authorizationHeaders(request: import("node:http").IncomingMessage) {

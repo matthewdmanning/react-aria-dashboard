@@ -3,6 +3,7 @@ import * as z from "zod/v4";
 import { cardTemplateSchemas, type CardTemplateName } from "./card-templates";
 
 export { cardTemplateSchemas, type CardTemplateName };
+export { roles, localUserRole, noPermissionsRole, findRole } from "./roles";
 
 const cardTemplateNameSchema = z.enum(
   Object.keys(cardTemplateSchemas) as [CardTemplateName, ...CardTemplateName[]],
@@ -162,7 +163,6 @@ export const dashboardConfigurationSchema = z
     themes: z.array(themeSchema),
     dashboard: dashboardSchema,
     fontScale: z.number().min(0.75).max(2),
-    roles: z.array(roleSchema),
     cards: z.array(cardSchema),
   })
   .strict();
@@ -171,8 +171,14 @@ export const dashboardConfigurationSchema = z
  * What `read("all")` returns: the categories the caller may read, with the rest
  * omitted. Parsing a projection with the full schema would reject a caller who
  * is denied one category, which is what omitting rather than failing avoids.
+ *
+ * Roles are not part of dashboard configuration (D35) — they come from the
+ * roles file — but `read("all")` returns them alongside it for a caller whose
+ * `roles` level allows it, so the readable projection carries them too.
  */
-export const readableDashboardSchema = dashboardConfigurationSchema.partial();
+export const readableDashboardSchema = dashboardConfigurationSchema
+  .partial()
+  .extend({ roles: z.array(roleSchema).optional() });
 
 export type ReadableDashboard = z.infer<typeof readableDashboardSchema>;
 
@@ -347,18 +353,6 @@ export const defaultDashboardConfiguration: DashboardConfiguration = {
   themes: [{ id: "calm", settings: {} }],
   dashboard: { id: "home", cards: ["welcome"], theme: "calm" },
   fontScale: 1,
-  roles: [
-    {
-      name: "local",
-      permissions: {
-        data: "write",
-        cards: "write",
-        presentation: "write",
-        integrations: "write",
-        roles: "none",
-      },
-    },
-  ],
   cards: [
     {
       id: "welcome",
@@ -393,11 +387,6 @@ export function parseDashboardConfiguration(
     configuration.cards.map(({ id }) => id),
     "card id",
   );
-  assertUnique(
-    configuration.roles.map(({ name }) => name),
-    "role name",
-  );
-
   const cardIds = new Set(configuration.cards.map(({ id }) => id));
   const themeIds = new Set(configuration.themes.map(({ id }) => id));
   const integrationIds = new Set(

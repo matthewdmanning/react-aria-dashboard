@@ -21,18 +21,6 @@ const configuration: DashboardConfiguration = {
   themes: [{ id: "calm", settings: { density: "comfortable" } }],
   dashboard: { id: "home", cards: ["first", "second"], theme: "calm" },
   fontScale: 1.1,
-  roles: [
-    {
-      name: "local",
-      permissions: {
-        data: "write",
-        cards: "write",
-        presentation: "read",
-        integrations: "read",
-        roles: "none",
-      },
-    },
-  ],
   cards: [
     {
       id: "first",

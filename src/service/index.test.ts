@@ -4,8 +4,10 @@ import { join } from "node:path";
 
 import {
   defaultDashboardConfiguration,
+  roles,
   type DashboardConfiguration,
   type Mutation,
+  type Role,
 } from "../contract";
 import type { CredentialStore } from "../server/integrations/credentials";
 import { createService, type DashboardPersistence } from "./index";
@@ -41,13 +43,8 @@ function createMemoryPersistence(
   };
 }
 
-function withLocalPermissions(
-  permissions: DashboardConfiguration["roles"][number]["permissions"],
-): DashboardConfiguration {
-  return {
-    ...defaultDashboardConfiguration,
-    roles: [{ name: "local", permissions }],
-  };
+function withLocalPermissions(permissions: Role["permissions"]): Role {
+  return { name: "local user", permissions };
 }
 
 describe("dashboard service", () => {
@@ -83,16 +80,17 @@ describe("dashboard service", () => {
   });
 
   test("never leaks a category the caller may not read back through apply", async () => {
-    const persistence = createMemoryPersistence(
-      withLocalPermissions({
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "write",
         integrations: "write",
         roles: "none",
       }),
-    );
-    const service = createService({ persistence });
+    });
 
     const result = await service.apply([
       { type: "set-font-scale", fontScale: 1.5 },
@@ -107,16 +105,17 @@ describe("dashboard service", () => {
     // by `projectReadable`), so this projection is not literally empty — but
     // it must resolve, not throw `permission-denied`, the way a bare
     // `read("all")` would for a role that may read nothing at all.
-    const persistence = createMemoryPersistence(
-      withLocalPermissions({
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
         data: "edit",
         cards: "none",
         presentation: "none",
         integrations: "none",
         roles: "none",
       }),
-    );
-    const service = createService({ persistence });
+    });
 
     const result = await service.apply([
       {
@@ -135,16 +134,17 @@ describe("dashboard service", () => {
   });
 
   test("rejects an unauthorized mutation without persisting any mutation", async () => {
-    const persistence = createMemoryPersistence(
-      withLocalPermissions({
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "none",
         integrations: "write",
         roles: "none",
       }),
-    );
-    const service = createService({ persistence });
+    });
 
     await expect(
       service.apply([
@@ -163,16 +163,17 @@ describe("dashboard service", () => {
   });
 
   test("lets an edit-level role change what exists but not create or destroy", async () => {
-    const persistence = createMemoryPersistence(
-      withLocalPermissions({
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
         data: "edit",
         cards: "edit",
         presentation: "edit",
         integrations: "edit",
         roles: "none",
       }),
-    );
-    const service = createService({ persistence });
+    });
 
     await expect(
       service.apply([
@@ -195,8 +196,9 @@ describe("dashboard service", () => {
   });
 
   test("resolves credentialed callers before checking their role", async () => {
-    const persistence = createMemoryPersistence({
-      ...defaultDashboardConfiguration,
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
       roles: [
         {
           name: "reader",
@@ -209,9 +211,6 @@ describe("dashboard service", () => {
           },
         },
       ],
-    });
-    const service = createService({
-      persistence,
       authStore: {
         resolve: async (credential) => {
           expect(credential).toBe("credential");
@@ -234,50 +233,65 @@ describe("dashboard service", () => {
       themes: defaultDashboardConfiguration.themes,
       fontScale: defaultDashboardConfiguration.fontScale,
       integrations: defaultDashboardConfiguration.integrations,
+      roles,
     });
   });
 
   test("tells a caller its own role however narrow that role is", async () => {
-    const persistence = createMemoryPersistence({
-      ...defaultDashboardConfiguration,
-      roles: [
-        {
-          name: "local",
-          permissions: {
-            data: "none",
-            cards: "none",
-            presentation: "none",
-            integrations: "none",
-            roles: "none",
-          },
-        },
-      ],
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
+        data: "none",
+        cards: "none",
+        presentation: "none",
+        integrations: "none",
+        roles: "none",
+      }),
     });
-    const service = createService({ persistence });
 
     await expect(service.read("role")).resolves.toMatchObject({
-      name: "local",
+      name: "local user",
       permissions: { roles: "none" },
     });
   });
 
   test("refuses a scoped read the role has no access to", async () => {
-    const service = createService({ persistence: createMemoryPersistence() });
+    const service = createService({
+      persistence: createMemoryPersistence(),
+      localUserRole: withLocalPermissions({
+        data: "write",
+        cards: "write",
+        presentation: "write",
+        integrations: "write",
+        roles: "none",
+      }),
+    });
 
     await expect(service.read("roles")).rejects.toThrow("roles: read");
   });
 
+  test("serves the roles file, not dashboard configuration", async () => {
+    const persistence = createMemoryPersistence();
+    const service = createService({ persistence });
+
+    await expect(service.read("roles")).resolves.toEqual(roles);
+    await service.apply([{ type: "set-font-scale", fontScale: 1.5 }]);
+    expect(persistence.writes[0]).not.toHaveProperty("roles");
+  });
+
   test("requires presentation write to remove a card a dashboard holds", async () => {
-    const persistence = createMemoryPersistence(
-      withLocalPermissions({
+    const persistence = createMemoryPersistence();
+    const service = createService({
+      persistence,
+      localUserRole: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "none",
         integrations: "write",
         roles: "none",
       }),
-    );
-    const service = createService({ persistence });
+    });
 
     await expect(
       service.apply([{ type: "remove-card", cardId: "welcome" }]),
@@ -467,15 +481,14 @@ describe("integration authorization", () => {
   test("refuses a caller without integrations: edit", async () => {
     const credentials = createMemoryCredentialStore();
     const service = createService({
-      persistence: createMemoryPersistence(
-        withLocalPermissions({
+      persistence: createMemoryPersistence(),
+        localUserRole: withLocalPermissions({
           data: "write",
           cards: "write",
           presentation: "write",
           integrations: "read",
           roles: "none",
         }),
-      ),
       credentials,
     });
 
@@ -555,15 +568,14 @@ describe("connectable integration types", () => {
 
   test("refuses a caller with no integrations access", async () => {
     const service = createService({
-      persistence: createMemoryPersistence(
-        withLocalPermissions({
+      persistence: createMemoryPersistence(),
+        localUserRole: withLocalPermissions({
           data: "write",
           cards: "write",
           presentation: "write",
           integrations: "none",
           roles: "none",
         }),
-      ),
       connectableTypes: ["google-calendar"],
     });
 

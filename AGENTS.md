@@ -16,10 +16,18 @@ What you need, and where it lives. This file routes; it does not restate. Where 
 | The MCP tool surface                                              | [`docs/agents/mcp.md`](docs/agents/mcp.md)                                                       |
 | How issues are tracked                                            | [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)                                   |
 | Triage labels                                                     | [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)                                   |
+| shadcn/ui documentation — index of every page, for lookup         | https://ui.shadcn.com/llms.txt                                                                   |
+| How `components.json` works, field by field                       | https://ui.shadcn.com/docs/components-json                                                       |
 | Available commands                                                | `package.json` scripts                                                                           |
 | Commit message style                                              | Conventional Commits; see `git log`                                                              |
 | Example source data shapes                                        | `templates/`                                                                                     |
 | What a finished card should look like                             | `examples/` — unreviewed product examples, not patterns to copy                                  |
+
+## How to respond
+
+- End a long response with a summary in bullet points. Plain language, no implementation detail, one item per line.
+- Size each bullet by severity and how load-bearing it is. A minor item gets a clause; something severe, or something later work will rest on, gets the length needed to act on it without reading back up.
+- Concise, but sufficient to decide from. Uniform-length bullets flatten the signal — a formatting nit should not read the same weight as a security decision.
 
 ## Non-negotiables
 

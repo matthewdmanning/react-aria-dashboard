@@ -1,0 +1,8 @@
+# Vendored skill packs. Formatting these would churn on every upstream update
+# and diverge from the source they are copied from.
+.claude/skills/
+.agents/skills/
+
+# Not ours to format.
+node_modules/
+dist/
