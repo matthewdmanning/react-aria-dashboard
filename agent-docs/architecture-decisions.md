@@ -258,6 +258,18 @@ Scope: **static trees only.** A tree of `{component, props, children}` cannot ex
 
 One mechanism, not two: whoever's editing a card template's source — hand-written or assembled — is real `react-aria-components` composition either way; a differently-run copy of this codebase is the same source code, not a second system with its own rules.
 
+### D23 — A dashboard declares its component library and style vocabulary at initialization
+
+Decided 2026-09-04.
+
+A dashboard is built against one presentational library — chota today — named once, when the dashboard is initialized, alongside the rest of the starting dashboard configuration (D9). This is a source/init-time declaration, not a mutation: nothing in the service surface changes which library a dashboard renders through, the same way nothing in the service surface changes a role (D19).
+
+The declared library fixes what a theme (D10) can say. `add-theme`/`edit-theme` (`presentation`, D14/F1) pick values from the library's own vocabulary — its CSS variables, its utility classes — never arbitrary CSS. A theme's settings are a selection within the declared library, not a stylesheet.
+
+Card templates (D22) draw their presentational classes from the same declared library. `react-aria-components` stays the structural layer D22 assembles from; the library governs how the assembled markup looks, not what it's built from.
+
+Rationale: the same reasoning as D22's correctness argument, applied to styling instead of structure. Letting a mutation (or a card template) introduce CSS ad hoc would mean re-deriving what "in bounds" means per call. Naming one library once and constraining every later styling choice to its vocabulary keeps that vocabulary checkable and reviewable, the way `tsc --noEmit` checks D22's composition trees against `react-aria-components`' real types.
+
 ---
 
 ## Frontier

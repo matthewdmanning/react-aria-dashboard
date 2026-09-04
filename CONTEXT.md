@@ -66,7 +66,13 @@ An optional, user-authorized connection to an external service. An integration e
 
 A named set of presentational settings applied to UI components — colour, typography, spacing, density. A theme cannot execute code, read dashboard data, or alter behavior.
 
-Theme definitions live in dashboard configuration; a dashboard references one.
+Theme definitions live in dashboard configuration; a dashboard references one. A theme's settings are a selection within the dashboard's component library, never arbitrary CSS.
+
+## Component library
+
+The fixed set of presentational components and CSS a dashboard is built from — chota today. Declared once, when the dashboard is initialized. No mutation changes it: like a role, changing it is a source change.
+
+A theme can only set values the declared library defines. A card template's presentational classes draw from the same library; `react-aria-components` remains the structural layer underneath.
 
 ## Role
 
