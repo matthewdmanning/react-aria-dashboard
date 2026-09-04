@@ -13,6 +13,7 @@ import {
   type ServiceFailureCode,
 } from "../service";
 import { createFileCredentialStore } from "./integrations/credentials";
+import { handleRegistryRequest } from "./registry";
 import type { FetchCalendar } from "./integrations/google-calendar";
 import {
   integrationPulls,
@@ -321,6 +322,22 @@ async function startServer() {
         response.writeHead(400, { "content-type": "text/plain" });
         response.end(
           error instanceof Error ? error.message : "Refresh failed",
+        );
+      }
+      return;
+    }
+
+    if (request.url?.startsWith("/r/")) {
+      try {
+        const result = await handleRegistryRequest(
+          new Request(`http://dashboard${request.url}`),
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        response.end(Buffer.from(await result.arrayBuffer()));
+      } catch (error) {
+        response.writeHead(400, { "content-type": "text/plain" });
+        response.end(
+          error instanceof Error ? error.message : "Registry request failed",
         );
       }
       return;

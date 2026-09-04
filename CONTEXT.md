@@ -70,9 +70,11 @@ Theme definitions live in dashboard configuration; a dashboard references one. A
 
 ## Component library
 
-The fixed set of presentational components and CSS a dashboard is built from — chota today. Declared once, when the dashboard is initialized. No mutation changes it: like a role, changing it is a source change.
+The fixed set of presentational components and CSS a dashboard is built from — shadcn/ui today. Declared once, when the dashboard is initialized. No mutation changes it: like a role, changing it is a source change.
 
 A theme can only set values the declared library defines. A card template's presentational classes draw from the same library; `react-aria-components` remains the structural layer underneath.
+
+A running dashboard serves its own wired-in card templates as a shadcn registry (`/r/registry.json`, `/r/<name>.json`), so a shadcn-aware client can discover and add them directly from that dashboard.
 
 ## Role
 

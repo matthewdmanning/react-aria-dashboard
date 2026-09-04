@@ -27,3 +27,20 @@ export const includedCardTemplates: IncludedCardTemplates = {
   calendar: calendarCard,
   chart: chartCard,
 };
+
+/**
+ * Which source file each template's export actually lives in — several
+ * templates share `display.tsx`. Kept alongside `includedCardTemplates`
+ * so the two never drift: this is the map the registry endpoint
+ * (src/server/registry.ts) reads to find each item's real file.
+ */
+export const cardTemplateSourceFiles: Record<
+  keyof IncludedCardTemplates,
+  string
+> = {
+  message: "message.tsx",
+  table: "display.tsx",
+  list: "display.tsx",
+  calendar: "display.tsx",
+  chart: "display.tsx",
+};

@@ -62,7 +62,9 @@ A card template's component is a declarative composition of `react-aria-componen
 
 Scope: static trees only. A widget needing local state or hooks (`useDragAndDrop`, `useListData`, a stepper's `useState`) can't be expressed as a composition tree and stays hand-written, reviewed the ordinary way. Drag-and-drop is out of scope for the assembled path. One mechanism either way — hand-written or assembled, upstream or in a differently-run copy of this codebase, the composition is the same real library.
 
-A dashboard declares one presentational library — chota today — once, at initialization (D23). `react-aria-components` is the structural layer both hand-written and assembled card templates compose; the declared library governs how that composition looks. A theme can only select values that library defines, never arbitrary CSS.
+A dashboard declares one presentational library — shadcn/ui today — once, at initialization (D23). `react-aria-components` is the structural layer both hand-written and assembled card templates compose; the declared library governs how that composition looks. A theme can only select values that library defines, never arbitrary CSS.
+
+A running dashboard also serves its own wired-in card templates as a shadcn-compatible registry, over HTTP at `/r/registry.json` and `/r/<name>.json` (D24) — any shadcn-aware client, including one connected over `shadcn mcp`, can search, view, and add a template straight from the running dashboard.
 
 ## Rendering path
 

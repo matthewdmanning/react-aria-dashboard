@@ -95,7 +95,7 @@ one. `npm run dev` starts the unrelated HTTP/client dev server
 - **`node_modules/.bin/tsx` cannot be spawned directly on Windows** via
   `child_process` with `command: process.execPath, args: [...]` — the `.bin`
   entry is a shell/cmd shim, not a Node script, and fails with `SyntaxError:
-  missing ) after argument list`. Point the spawn at
+missing ) after argument list`. Point the spawn at
   `node_modules/tsx/dist/cli.mjs` instead (a real ESM entry point), run with
   `process.execPath`.
 - **`npm run init` (`src/scripts/init-dashboard.ts`) always writes the
