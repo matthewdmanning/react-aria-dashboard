@@ -1,67 +1,15 @@
-import * as z from "zod/v4";
+import type * as z from "zod/v4";
 
-export const cardTemplateSchemas = {
-  message: z
-    .object({
-      message: z.string(),
-    })
-    .strict(),
-  table: z
-    .object({
-      columns: z.array(
-        z
-          .object({
-            key: z.string(),
-            label: z.string(),
-          })
-          .strict(),
-      ),
-      rows: z.array(
-        z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
-      ),
-    })
-    .strict(),
-  list: z
-    .object({
-      items: z.array(
-        z
-          .object({
-            id: z.string(),
-            title: z.string(),
-            body: z.string().optional(),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-  calendar: z
-    .object({
-      events: z.array(
-        z
-          .object({
-            id: z.string(),
-            title: z.string(),
-            start: z.string(),
-            end: z.string().optional(),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-  chart: z
-    .object({
-      title: z.string(),
-      summary: z.string(),
-      series: z.array(
-        z
-          .object({
-            label: z.string(),
-            value: z.number(),
-          })
-          .strict(),
-      ),
-    })
-    .strict(),
-};
+/**
+ * Each card template's schema, by template name — one half of a card template,
+ * the other being its component in `card-templates` (D22).
+ *
+ * Empty. The original five (`message`, `table`, `list`, `calendar`, `chart`)
+ * were deleted in D32: they rendered raw HTML with no styling, predated every
+ * decision from D25 onward, and were not a base to build shadcn templates on.
+ * Templates are added back here as they are written, each paired with its
+ * component.
+ */
+export const cardTemplateSchemas: Record<string, z.ZodType<unknown>> = {};
 
-export type CardTemplateName = keyof typeof cardTemplateSchemas;
+export type CardTemplateName = string;

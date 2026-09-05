@@ -5,9 +5,17 @@ import { cardTemplateSchemas, type CardTemplateName } from "./card-templates";
 export { cardTemplateSchemas, type CardTemplateName };
 export { roles, localUserRole, noPermissionsRole, findRole } from "./roles";
 
-const cardTemplateNameSchema = z.enum(
-  Object.keys(cardTemplateSchemas) as [CardTemplateName, ...CardTemplateName[]],
-);
+/**
+ * A card template name is valid when this dashboard actually has that template.
+ * Checked by membership rather than a fixed enum, because the set is empty
+ * today (D32) and an enum needs at least one member.
+ */
+const cardTemplateNameSchema = z
+  .string()
+  .min(1)
+  .refine((name) => name in cardTemplateSchemas, {
+    message: "Unknown card template",
+  });
 
 const permissionLevelSchema = z.enum(["none", "read", "edit", "write"]);
 
@@ -351,17 +359,11 @@ export const mutationRequirements = {
 export const defaultDashboardConfiguration: DashboardConfiguration = {
   integrations: [],
   themes: [{ id: "calm", settings: {} }],
-  dashboard: { id: "home", cards: ["welcome"], theme: "calm" },
+  dashboard: { id: "home", cards: [], theme: "calm" },
   fontScale: 1,
-  cards: [
-    {
-      id: "welcome",
-      title: "Dashboard",
-      template: "message",
-      state: { message: "Welcome to your dashboard." },
-      queries: [],
-    },
-  ],
+  // No cards: every card template was deleted in D32 and none has been
+  // rebuilt on shadcn yet, so there is nothing a default card could render.
+  cards: [],
 };
 
 function assertUnique(values: string[], label: string): void {
@@ -420,7 +422,7 @@ export function parseDashboardConfiguration(
       }
     }
 
-    const state = cardTemplateSchemas[card.template].safeParse(card.state);
+    const state = cardTemplateSchemas[card.template]!.safeParse(card.state);
     if (!state.success) {
       throw new Error(
         `Invalid dashboard configuration: card '${card.id}' state does not fit card template '${card.template}': ${z.prettifyError(state.error)}`,

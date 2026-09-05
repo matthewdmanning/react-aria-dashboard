@@ -13,6 +13,10 @@ import {
   handleIntegrationRefreshRequest,
   handleIntegrationTypesRequest,
 } from "./index";
+import {
+  useTestCardTemplates,
+  withTestCard,
+} from "../test-support/card-template";
 
 function createMemoryPersistence(
   initial = defaultDashboardConfiguration,
@@ -149,6 +153,8 @@ describe("dashboard service HTTP transport", () => {
 });
 
 describe("integration refresh endpoint", () => {
+  useTestCardTemplates();
+
   const calendarQuery = {
     integration: "team-calendar",
     query: { calendarId: "team" },

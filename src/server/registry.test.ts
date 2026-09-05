@@ -2,8 +2,14 @@ import { describe, expect, test } from "vitest";
 
 import { cardTemplateSourceFiles, includedCardTemplates } from "../client/cards";
 import { handleRegistryRequest } from "./registry";
+import {
+  useTestCardTemplates,
+  withTestCard,
+} from "../test-support/card-template";
 
 describe("dashboard registry", () => {
+  useTestCardTemplates();
+
   test("index lists every included card template, no file content", async () => {
     const response = await handleRegistryRequest(
       new Request("http://dashboard/r/registry.json"),
@@ -30,7 +36,7 @@ describe("dashboard registry", () => {
     expect(body.files[0].path).toBe(
       `src/client/cards/${cardTemplateSourceFiles.message}`,
     );
-    expect(body.files[0].content).toContain("messageCard");
+    expect(body.files[0].content).toContain("CardView");
   });
 
   test("unknown item name 404s", async () => {

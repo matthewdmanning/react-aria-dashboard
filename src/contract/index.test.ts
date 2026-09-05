@@ -9,6 +9,10 @@ import {
   type DashboardConfiguration,
   type FormatterSpec,
 } from "./index";
+import {
+  useTestCardTemplates,
+  withTestCard,
+} from "../test-support/card-template";
 
 const configuration: DashboardConfiguration = {
   integrations: [
@@ -53,6 +57,8 @@ const configuration: DashboardConfiguration = {
 };
 
 describe("dashboard contract", () => {
+  useTestCardTemplates();
+
   test("parses the settled configuration shape", () => {
     expect(parseDashboardConfiguration(configuration)).toEqual(configuration);
   });

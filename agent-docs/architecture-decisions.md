@@ -442,6 +442,14 @@ This makes D31's privacy outcome structural rather than enforced by filtering. T
 
 **The original five card templates are deleted.** `message`, `table`, `list`, `calendar`, and `chart` (`src/client/cards/`) go. They render raw HTML with no styling, predate every decision from D25 onward, and are not a base to build on.
 
+Done, with what fell out of it recorded here because a dashboard that renders nothing is a surprising state to find the tree in:
+
+- `cardTemplateSchemas` is empty, and a card template name is now validated by membership in it rather than by a fixed enum — `z.enum` needs at least one member.
+- `defaultDashboardConfiguration` ships no cards and an empty dashboard, since no template exists for one to name. `CardView` renders "this dashboard has no card template" for any card that does name one.
+- The registry serves an empty index. That is correct rather than broken: it reports what this dashboard actually has.
+- `formatMessage`, the built-in formatter for the `message` template, goes with it. `formatIdentity` stays.
+- The deleted schemas moved to `src/test-support/card-template.ts`, out of the shipped product. Tests about the service, the contract, and the registry are not about which templates ship — they need only that one exists — so they register a fixture rather than being deleted alongside it.
+
 Open:
 
 - **Which role holds the delete permission.** `local` is the only role that exists (`src/contract/index.ts:352`) and holds the highest levels — `write` in every category but `roles`. It is also the role a caller with no credential resolves to (D12), so naming it the delete authority would let an unauthenticated local caller delete any user's queries. Either a second, credentialed role is added at source (roles are a source change, D19), or the delete permission is stated against something other than the role table.

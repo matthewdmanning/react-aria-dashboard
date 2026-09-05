@@ -11,6 +11,15 @@ import {
 } from "../contract";
 import type { CredentialStore } from "../server/integrations/credentials";
 import { createService, type DashboardPersistence } from "./index";
+import {
+  useTestCardTemplates,
+  withTestCard,
+} from "../test-support/card-template";
+
+useTestCardTemplates();
+
+/** The default configuration is cardless since D32; these tests need a card. */
+const testConfiguration = withTestCard(defaultDashboardConfiguration);
 
 function createMemoryCredentialStore(): CredentialStore {
   const values = new Map<string, string>();
@@ -26,7 +35,7 @@ function createMemoryCredentialStore(): CredentialStore {
 }
 
 function createMemoryPersistence(
-  initial = defaultDashboardConfiguration,
+  initial = testConfiguration,
 ): DashboardPersistence & {
   writes: DashboardConfiguration[];
 } {
@@ -53,7 +62,7 @@ describe("dashboard service", () => {
     const service = createService({ persistence });
 
     await expect(service.read("cards")).resolves.toEqual(
-      defaultDashboardConfiguration.cards,
+      testConfiguration.cards,
     );
   });
 
@@ -220,7 +229,7 @@ describe("dashboard service", () => {
     });
 
     await expect(service.read("cards", "credential")).resolves.toEqual(
-      defaultDashboardConfiguration.cards,
+      testConfiguration.cards,
     );
   });
 
@@ -228,11 +237,11 @@ describe("dashboard service", () => {
     const service = createService({ persistence: createMemoryPersistence() });
 
     await expect(service.read("all")).resolves.toEqual({
-      cards: defaultDashboardConfiguration.cards,
-      dashboard: defaultDashboardConfiguration.dashboard,
-      themes: defaultDashboardConfiguration.themes,
-      fontScale: defaultDashboardConfiguration.fontScale,
-      integrations: defaultDashboardConfiguration.integrations,
+      cards: testConfiguration.cards,
+      dashboard: testConfiguration.dashboard,
+      themes: testConfiguration.themes,
+      fontScale: testConfiguration.fontScale,
+      integrations: testConfiguration.integrations,
       roles,
     });
   });
@@ -450,7 +459,7 @@ describe("integration authorization", () => {
     const credentials = createMemoryCredentialStore();
     const service = createService({
       persistence: createMemoryPersistence({
-        ...defaultDashboardConfiguration,
+        ...testConfiguration,
         integrations: [
           { id: "team-calendar", type: "google-calendar", settings: {} },
         ],
@@ -503,7 +512,7 @@ describe("integration authorization", () => {
     await credentials.set("team-calendar", "secret-token");
     const service = createService({
       persistence: createMemoryPersistence({
-        ...defaultDashboardConfiguration,
+        ...testConfiguration,
         integrations: [
           { id: "team-calendar", type: "google-calendar", settings: {} },
         ],
@@ -523,13 +532,13 @@ describe("integration authorization", () => {
     await credentials.set("team-calendar", "secret-token");
     const service = createService({
       persistence: createMemoryPersistence({
-        ...defaultDashboardConfiguration,
+        ...testConfiguration,
         integrations: [
           { id: "team-calendar", type: "google-calendar", settings: {} },
         ],
         cards: [
           {
-            ...defaultDashboardConfiguration.cards[0]!,
+            ...testConfiguration.cards[0]!,
             queries: [
               {
                 integration: "team-calendar",
