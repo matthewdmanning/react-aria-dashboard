@@ -91,7 +91,7 @@ describe("the service's local user", () => {
     });
 
     await expect(service.read("role", "secret")).resolves.toMatchObject({
-      name: "local user",
+      name: "localUser",
       permissions: { data: "write", roles: "read" },
     });
   });
@@ -103,7 +103,7 @@ describe("the service's local user", () => {
     });
 
     await expect(service.read("role")).resolves.toMatchObject({
-      name: "none",
+      name: "unauthenticatedUser",
       permissions: { data: "none", cards: "none", roles: "none" },
     });
     await expect(service.read("cards")).rejects.toThrow("cards: read");
@@ -124,7 +124,7 @@ describe("the service's local user", () => {
     const service = createService({ persistence: memoryPersistence() });
 
     await expect(service.read("role")).resolves.toMatchObject({
-      name: "local user",
+      name: "localUser",
     });
   });
 });

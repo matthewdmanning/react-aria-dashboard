@@ -566,7 +566,7 @@ Each door proves it differently, for the same reason:
 | `mcp`, over stdio    | By construction. Spawning the process already required being that OS account, and there is no port to reach it on.          |
 | the browser, on HTTP | The server prints `http://127.0.0.1:<port>/?token=…` to its own stdout. Only whoever can read that stdout is the same user. |
 
-The page stores the token in `sessionStorage` and strips it from the address bar, then sends it as a bearer credential. Another OS account can still open the port and load the page, but never receives the token, so it proves nothing and resolves to `noPermissionsRole` — not to the local user, as loopback alone would have given it. This is how Jupyter authenticates a local notebook.
+The page stores the token in `sessionStorage` and strips it from the address bar, then sends it as a bearer credential. Another OS account can still open the port and load the page, but never receives the token, so it proves nothing and resolves to `unauthenticatedUser` — not to the local user, as loopback alone would have given it. This is how Jupyter authenticates a local notebook.
 
 A build with no token provisioned treats an unproven caller as the local user, since there is then no door at which anything could be proved. `service` decides this from whether `localUserToken` is set.
 

@@ -48,7 +48,7 @@ function createTestService(
   extra: {
     credentials?: CredentialStore;
     connectableTypes?: string[];
-    localUserRole?: Role;
+    localUser?: Role;
   } = {},
 ): DashboardService {
   return createService({
@@ -98,8 +98,8 @@ describe("dashboard service HTTP transport", () => {
     const response = await handleDashboardConfigurationRequest(
       new Request("http://dashboard/api/dashboard-configuration?scope=roles"),
       createTestService(defaultDashboardConfiguration, {
-        localUserRole: {
-        name: "local user",
+        localUser: {
+        name: "localUser",
         permissions: {
           data: "write",
           cards: "write",
@@ -301,8 +301,8 @@ describe("integration types endpoint", () => {
   test("resolves a role like every other request, refusing a caller with no integrations access", async () => {
     const service = createTestService(defaultDashboardConfiguration, {
       connectableTypes: ["google-calendar"],
-      localUserRole: {
-        name: "local user",
+      localUser: {
+        name: "localUser",
         permissions: {
           data: "write",
           cards: "write",
@@ -361,8 +361,8 @@ describe("integration authorization endpoint", () => {
     const credentials = createMemoryCredentialStore();
     const service = createTestService(defaultDashboardConfiguration, {
       credentials,
-      localUserRole: {
-        name: "local user",
+      localUser: {
+        name: "localUser",
         permissions: {
           data: "write",
           cards: "write",

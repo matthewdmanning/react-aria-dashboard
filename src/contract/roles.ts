@@ -42,8 +42,8 @@ export const roles: Role[] = [
  * anyway. A caller proves it is that user by presenting the local-user token;
  * see `src/auth/local-user.ts` for what makes that proof.
  */
-export const localUserRole: Role = {
-  name: "local user",
+export const localUser: Role = {
+  name: "localUser",
   permissions: {
     data: "write",
     cards: "write",
@@ -54,8 +54,8 @@ export const localUserRole: Role = {
 };
 
 /** What a caller who proves nothing gets: nothing. */
-export const noPermissionsRole: Role = {
-  name: "none",
+export const unauthenticatedUser: Role = {
+  name: "unauthenticatedUser",
   permissions: {
     data: "none",
     cards: "none",

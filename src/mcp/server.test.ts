@@ -46,7 +46,7 @@ function createTestService(
   extra: {
     credentials?: CredentialStore;
     connectableTypes?: string[];
-    localUserRole?: Role;
+    localUser?: Role;
   } = {},
 ): DashboardService {
   return createService({
@@ -140,8 +140,8 @@ describe("dashboard MCP server", () => {
     // This caller's role has `roles: none`.
     const client = await connectClient(
       createTestService(defaultDashboardConfiguration, {
-        localUserRole: {
-          name: "local user",
+        localUser: {
+          name: "localUser",
           permissions: {
             data: "write",
             cards: "write",
@@ -167,8 +167,8 @@ describe("dashboard MCP server", () => {
   test("a denied apply surfaces as an MCP error carrying the service's failure code", async () => {
     const client = await connectClient(
       createTestService(defaultDashboardConfiguration, {
-        localUserRole: {
-          name: "local user",
+        localUser: {
+          name: "localUser",
           permissions: {
             data: "read",
             cards: "read",
@@ -281,8 +281,8 @@ describe("integration authorization through MCP", () => {
     const client = await connectClient(
       createTestService(defaultDashboardConfiguration, {
         credentials,
-        localUserRole: {
-          name: "local user",
+        localUser: {
+          name: "localUser",
           permissions: {
             data: "write",
             cards: "write",

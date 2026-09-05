@@ -12,9 +12,9 @@ import type { CredentialStore } from "../server/integrations/credentials";
 import { generateComponentSource } from "../card-templates/codegen";
 import {
   defaultDashboardConfiguration,
-  localUserRole,
+  localUser,
   mutationRequirements,
-  noPermissionsRole,
+  unauthenticatedUser,
   mutationsSchema,
   parseDashboardConfiguration,
   roles,
@@ -98,8 +98,8 @@ interface Dependencies {
    * only by tests, since configuring roles means editing that file.
    */
   roles?: readonly Role[];
-  /** What a caller proving it is the local user resolves to. Defaults to `localUserRole` (D35). */
-  localUserRole?: Role;
+  /** What a caller proving it is the local user resolves to. Defaults to `localUser` (D35). */
+  localUser?: Role;
   /**
    * The local-user token this process provisioned (`src/auth/local-user.ts`).
    * When set, only a caller presenting it is the local user and an unproven
@@ -211,7 +211,7 @@ async function resolveRole(
   dependencies: Dependencies,
   credential: string | undefined,
 ): Promise<Role> {
-  const asLocalUser = dependencies.localUserRole ?? localUserRole;
+  const asLocalUser = dependencies.localUser ?? localUser;
 
   // The local user proves itself with the token only that OS account can read.
   if (isLocalUserToken(credential, dependencies.localUserToken)) {
@@ -223,7 +223,7 @@ async function resolveRole(
     // there is no door to prove anything at, so the caller is the local user.
     return dependencies.localUserToken === undefined
       ? asLocalUser
-      : noPermissionsRole;
+      : unauthenticatedUser;
   }
 
   if (!dependencies.authStore) {

@@ -53,7 +53,7 @@ function createMemoryPersistence(
 }
 
 function withLocalPermissions(permissions: Role["permissions"]): Role {
-  return { name: "local user", permissions };
+  return { name: "localUser", permissions };
 }
 
 describe("dashboard service", () => {
@@ -92,7 +92,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "write",
@@ -117,7 +117,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "edit",
         cards: "none",
         presentation: "none",
@@ -146,7 +146,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "none",
@@ -175,7 +175,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "edit",
         cards: "edit",
         presentation: "edit",
@@ -250,7 +250,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "none",
         cards: "none",
         presentation: "none",
@@ -260,7 +260,7 @@ describe("dashboard service", () => {
     });
 
     await expect(service.read("role")).resolves.toMatchObject({
-      name: "local user",
+      name: "localUser",
       permissions: { roles: "none" },
     });
   });
@@ -268,7 +268,7 @@ describe("dashboard service", () => {
   test("refuses a scoped read the role has no access to", async () => {
     const service = createService({
       persistence: createMemoryPersistence(),
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "write",
@@ -293,7 +293,7 @@ describe("dashboard service", () => {
     const persistence = createMemoryPersistence();
     const service = createService({
       persistence,
-      localUserRole: withLocalPermissions({
+      localUser: withLocalPermissions({
         data: "write",
         cards: "write",
         presentation: "none",
@@ -491,7 +491,7 @@ describe("integration authorization", () => {
     const credentials = createMemoryCredentialStore();
     const service = createService({
       persistence: createMemoryPersistence(),
-        localUserRole: withLocalPermissions({
+        localUser: withLocalPermissions({
           data: "write",
           cards: "write",
           presentation: "write",
@@ -578,7 +578,7 @@ describe("connectable integration types", () => {
   test("refuses a caller with no integrations access", async () => {
     const service = createService({
       persistence: createMemoryPersistence(),
-        localUserRole: withLocalPermissions({
+        localUser: withLocalPermissions({
           data: "write",
           cards: "write",
           presentation: "write",

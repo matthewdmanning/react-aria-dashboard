@@ -13,7 +13,7 @@ describe("auth store", () => {
       path,
       JSON.stringify([
         { credential: "credential", role: "reader" },
-        { credential: "other", role: "local" },
+        { credential: "other", role: "localUser" },
       ]),
     );
 
@@ -40,7 +40,7 @@ describe("auth store", () => {
       path,
       JSON.stringify([
         { credential: "credential", role: "reader" },
-        { credential: "credential", role: "local" },
+        { credential: "credential", role: "localUser" },
       ]),
     );
 

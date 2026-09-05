@@ -3,7 +3,7 @@ import * as z from "zod/v4";
 import { cardTemplateSchemas, type CardTemplateName } from "./card-templates";
 
 export { cardTemplateSchemas, type CardTemplateName };
-export { roles, localUserRole, noPermissionsRole, findRole } from "./roles";
+export { roles, localUser, unauthenticatedUser, findRole } from "./roles";
 
 /**
  * A card template name is valid when this dashboard actually has that template.

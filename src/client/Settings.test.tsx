@@ -45,7 +45,7 @@ describe("Settings contract", () => {
       render(
         {},
         {
-          name: "local",
+          name: "localUser",
           permissions: {
             data: "write",
             cards: "write",
@@ -58,7 +58,7 @@ describe("Settings contract", () => {
       "Your role",
     );
 
-    expect(own).toContain("local");
+    expect(own).toContain("localUser");
     expect(own).toContain("roles: none");
     expect(own).not.toContain("<select");
     expect(own).not.toContain("<button");
