@@ -438,7 +438,13 @@ This makes D31's privacy outcome structural rather than enforced by filtering. T
 
 **`react-aria-components` leaves `package.json`.** D25 made its use stale; this removes it. Pre-alpha, so it is deleted outright rather than deprecated.
 
-Corrected: this decision first said `@base-ui/react` goes with it. That was wrong. `@base-ui/react` is what shadcn/ui's `base-nova` style is built on — `src/components/ui/{badge,button,separator}.tsx` import it directly — so it is shadcn's own substrate rather than a competing headless layer, and removing it would break those components. It stays.
+Corrected: this decision first said `@base-ui/react` goes with it. That was wrong, and so was the first correction's reason for keeping it.
+
+`@base-ui/react` is not shadcn's substrate — shadcn is not tied to Base UI at all. `components.json` carries a `base` field of `radix` or `base` that "determines component APIs and available props", and the `shadcn` package itself depends on neither: the primitive library arrives with the components the CLI writes. The two APIs differ enough to need their own ruleset (`asChild` versus `render`, Select's `items`, Slider scalar versus array).
+
+It stays because this dashboard chose the `base-nova` preset. Having chosen `base`, `src/components/ui/{badge,button,separator}.tsx` import it directly and removing it breaks them; `card.tsx` and `table.tsx` need no primitive at all. Moving to Radix would be a preset change, not a package edit.
+
+shadcn is strictly React, though: every template it offers is a React one — `next`, `vite`, `start`, `react-router`, `astro` — and the Vue and Svelte ports are separate projects.
 
 `react-aria-components` has not left yet either: the composition-tree assembler (D22) still generates imports from it and typechecks against it, so it goes once that is reworked onto the registry-item output above.
 
