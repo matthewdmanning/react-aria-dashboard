@@ -460,9 +460,7 @@ Done, with what fell out of it recorded here because a dashboard that renders no
 - `formatMessage`, the built-in formatter for the `message` template, goes with it. `formatIdentity` stays.
 - The deleted schemas moved to `src/test-support/card-template.ts`, out of the shipped product. Tests about the service, the contract, and the registry are not about which templates ship — they need only that one exists — so they register a fixture rather than being deleted alongside it.
 
-Open:
-
-- **Which role holds the delete permission.** `local` is the only role that exists (`src/contract/index.ts:352`) and holds the highest levels — `write` in every category but `roles`. It is also the role a caller with no credential resolves to (D12), so naming it the delete authority would let an unauthenticated local caller delete any user's queries. Either a second, credentialed role is added at source (roles are a source change, D19), or the delete permission is stated against something other than the role table.
+Which role holds the delete permission is settled in D35: `admin`. The `local` role this decision named no longer exists — D35 replaced it with the local user, proved by token, and shipped `admin` and `user` as the two roles.
 
 What `themeSchema.settings` holds is settled in D33.
 
