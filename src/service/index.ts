@@ -296,18 +296,18 @@ function projectReadable(
 
   // ponytail: `data` adds nothing past `cards`; split them if a role ever needs
   // card state without the cards themselves.
-  if (role.permissions.cards !== "none" || role.permissions.data !== "none") {
+  if (role.permissions.cards !== "noAccess" || role.permissions.data !== "noAccess") {
     readable.cards = configuration.cards;
   }
-  if (role.permissions.presentation !== "none") {
+  if (role.permissions.presentation !== "noAccess") {
     readable.dashboard = configuration.dashboard;
     readable.themes = configuration.themes;
     readable.fontScale = configuration.fontScale;
   }
-  if (role.permissions.integrations !== "none") {
+  if (role.permissions.integrations !== "noAccess") {
     readable.integrations = configuration.integrations;
   }
-  if (role.permissions.roles !== "none") readable.roles = [...availableRoles];
+  if (role.permissions.roles !== "noAccess") readable.roles = [...availableRoles];
 
   if (Object.keys(readable).length === 0 && !allowEmpty) {
     throw new ServiceFailure("permission-denied", "Permission denied: read");
@@ -433,7 +433,7 @@ async function readConnectableTypes(
 }
 
 function requireRead(role: Role, category: PermissionCategory): void {
-  if (role.permissions[category] === "none") {
+  if (role.permissions[category] === "noAccess") {
     throw new ServiceFailure(
       "permission-denied",
       `Permission denied: ${category}: read`,
@@ -442,7 +442,7 @@ function requireRead(role: Role, category: PermissionCategory): void {
 }
 
 const permissionRank: Record<PermissionLevel, number> = {
-  none: 0,
+  noAccess: 0,
   read: 1,
   edit: 2,
   write: 3,

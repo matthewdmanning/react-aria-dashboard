@@ -51,7 +51,7 @@ describe("Settings contract", () => {
             cards: "write",
             presentation: "write",
             integrations: "write",
-            roles: "none",
+            roles: "noAccess",
           },
         },
       ),
@@ -59,7 +59,7 @@ describe("Settings contract", () => {
     );
 
     expect(own).toContain("localUser");
-    expect(own).toContain("roles: none");
+    expect(own).toContain("roles: noAccess");
     expect(own).not.toContain("<select");
     expect(own).not.toContain("<button");
   });
@@ -70,11 +70,11 @@ describe("Settings contract", () => {
         {
           name: "reader",
           permissions: {
-            data: "none",
+            data: "noAccess",
             cards: "read",
             presentation: "edit",
             integrations: "write",
-            roles: "none",
+            roles: "noAccess",
           },
         },
       ],

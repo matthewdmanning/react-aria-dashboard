@@ -97,13 +97,13 @@ The service exposes two operations: `read(scope)` returns state, and `apply(muta
 
 Mutations change cards, the dashboard, themes, and integrations. They never change roles, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level. Card templates are the one exception (D22): the service can assemble one's component from a declarative composition tree, gated by a permission level like any other mutation.
 
-Every request resolves to an account, then a role, then permissions, at one enforcement point. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
+Every request resolves to an account, then a role, then permissions, at one enforcement point. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `noAccess`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 
 `edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. A mutation's category and required level both follow from its type, so a caller states only its payload and one lookup decides what the caller's bundle must hold.
 
 The matrix governs shared and server-owned things only (D35). What belongs to one user — their queries, base colour, typeset, own presets — is theirs by structure, and no category or level gates it.
 
-Two roles ship as defaults (D35): `admin` (`write` on `data`, `cards`, `presentation`, `integrations`; `read` on `roles`) and `user` (`write` on `data`, `read` on `cards`, `presentation`, and `integrations`, `none` on `roles`). Roles are configured by editing a roles file the source imports — the same access as editing source code — not through the service. They do not live in dashboard configuration.
+Two roles ship as defaults (D35): `admin` (`write` on `data`, `cards`, `presentation`, `integrations`; `read` on `roles`) and `user` (`write` on `data`, `read` on `cards`, `presentation`, and `integrations`, `noAccess` on `roles`). Roles are configured by editing a roles file the source imports — the same access as editing source code — not through the service. They do not live in dashboard configuration.
 
 A caller with no credential resolves to full permissions if it is the local user and to none otherwise (D35). Proof is a token written at startup to `.dashboard/local-user-token`, restricted to the owning account — `chmod` 0600 on POSIX, `icacls` on Windows, where `chmod` grants nothing. `mcp` over stdio is the local user by construction; the browser receives the token in the URL the server prints to its own stdout. Loopback is not itself proof: another OS account on the host can reach the port.
 

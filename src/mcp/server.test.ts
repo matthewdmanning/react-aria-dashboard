@@ -137,7 +137,7 @@ describe("dashboard MCP server", () => {
   });
 
   test("a denied read surfaces as an MCP error carrying the service's failure code", async () => {
-    // This caller's role has `roles: none`.
+    // This caller's role has `roles: noAccess`.
     const client = await connectClient(
       createTestService(defaultDashboardConfiguration, {
         localUser: {
@@ -147,7 +147,7 @@ describe("dashboard MCP server", () => {
             cards: "write",
             presentation: "write",
             integrations: "write",
-            roles: "none",
+            roles: "noAccess",
           },
         },
       }),
@@ -174,7 +174,7 @@ describe("dashboard MCP server", () => {
             cards: "read",
             presentation: "read",
             integrations: "read",
-            roles: "none",
+            roles: "noAccess",
           },
         },
       }),
@@ -288,7 +288,7 @@ describe("integration authorization through MCP", () => {
             cards: "write",
             presentation: "write",
             integrations: "read",
-            roles: "none",
+            roles: "noAccess",
           },
         },
       }),

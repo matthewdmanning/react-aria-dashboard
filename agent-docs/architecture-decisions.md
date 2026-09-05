@@ -215,11 +215,13 @@ This narrows D3. Roles still live in dashboard configuration, still carry no cre
 
 **Stands. Sharpened by D35**, which moves roles into a source-imported roles file: still no mutation, still the same trust level as changing source, but a file meant to be edited rather than a literal in `contract`.
 
-### D20 — Four permission levels: `none`, `read`, `edit`, `write`
+### D20 — Four permission levels: `noAccess`, `read`, `edit`, `write`
 
 Decided 2026-09-01, while implementing #60.
 
-`none < read < edit < write`, ranked. `edit` changes something that already exists; `write` also creates and destroys. Each level implies every level below it.
+`noAccess < read < edit < write`, ranked. The bottom level was named `none`
+until it was renamed for explicitness: it read as an absence rather than as a
+level, and sat one word away from the role a caller with no proof resolves to. `edit` changes something that already exists; `write` also creates and destroys. Each level implies every level below it.
 
 The split falls on the mutation, not the category:
 
@@ -515,13 +517,13 @@ Decided 2026-09-04.
 
 **Two roles ship as defaults.** They are ordinary configuration, not fixed names in the source — see below.
 
-| Category       | `admin` | `user`  |
-| -------------- | ------- | ------- |
-| `data`         | `write` | `write` |
-| `cards`        | `write` | `read`  |
-| `presentation` | `write` | `read`  |
-| `integrations` | `write` | `read`  |
-| `roles`        | `read`  | `none`  |
+| Category       | `admin` | `user`     |
+| -------------- | ------- | ---------- |
+| `data`         | `write` | `write`    |
+| `cards`        | `write` | `read`     |
+| `presentation` | `write` | `read`     |
+| `integrations` | `write` | `read`     |
+| `roles`        | `read`  | `noAccess` |
 
 `user` holds every `data` permission and reads cards, presentation, and integrations. It has no `cards: edit` and no `cards: write`: a user contributes data to cards but does not retitle, re-template, add, or remove them.
 

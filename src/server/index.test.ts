@@ -105,7 +105,7 @@ describe("dashboard service HTTP transport", () => {
           cards: "write",
           presentation: "write",
           integrations: "write",
-          roles: "none",
+          roles: "noAccess",
         },
       },
       }),
@@ -307,8 +307,8 @@ describe("integration types endpoint", () => {
           data: "write",
           cards: "write",
           presentation: "write",
-          integrations: "none",
-          roles: "none",
+          integrations: "noAccess",
+          roles: "noAccess",
         },
       },
     });
@@ -368,7 +368,7 @@ describe("integration authorization endpoint", () => {
           cards: "write",
           presentation: "write",
           integrations: "read",
-          roles: "none",
+          roles: "noAccess",
         },
       },
     });

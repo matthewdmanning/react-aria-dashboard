@@ -31,7 +31,7 @@ export const roles: Role[] = [
       cards: "read",
       presentation: "read",
       integrations: "read",
-      roles: "none",
+      roles: "noAccess",
     },
   },
 ];
@@ -57,11 +57,11 @@ export const localUser: Role = {
 export const unauthenticatedUser: Role = {
   name: "unauthenticatedUser",
   permissions: {
-    data: "none",
-    cards: "none",
-    presentation: "none",
-    integrations: "none",
-    roles: "none",
+    data: "noAccess",
+    cards: "noAccess",
+    presentation: "noAccess",
+    integrations: "noAccess",
+    roles: "noAccess",
   },
 };
 

@@ -97,7 +97,7 @@ describe("dashboard service", () => {
         cards: "write",
         presentation: "write",
         integrations: "write",
-        roles: "none",
+        roles: "noAccess",
       }),
     });
 
@@ -110,7 +110,7 @@ describe("dashboard service", () => {
 
   test("a caller who may change what it cannot otherwise read still gets an answer, not a throw", async () => {
     // `data: edit` alone lets a caller patch card state; every other category
-    // is `none`. Reading `cards` piggybacks on `data` (see the ponytail note
+    // is `noAccess`. Reading `cards` piggybacks on `data` (see the ponytail note
     // by `projectReadable`), so this projection is not literally empty — but
     // it must resolve, not throw `permission-denied`, the way a bare
     // `read("all")` would for a role that may read nothing at all.
@@ -119,10 +119,10 @@ describe("dashboard service", () => {
       persistence,
       localUser: withLocalPermissions({
         data: "edit",
-        cards: "none",
-        presentation: "none",
-        integrations: "none",
-        roles: "none",
+        cards: "noAccess",
+        presentation: "noAccess",
+        integrations: "noAccess",
+        roles: "noAccess",
       }),
     });
 
@@ -149,9 +149,9 @@ describe("dashboard service", () => {
       localUser: withLocalPermissions({
         data: "write",
         cards: "write",
-        presentation: "none",
+        presentation: "noAccess",
         integrations: "write",
-        roles: "none",
+        roles: "noAccess",
       }),
     });
 
@@ -180,7 +180,7 @@ describe("dashboard service", () => {
         cards: "edit",
         presentation: "edit",
         integrations: "edit",
-        roles: "none",
+        roles: "noAccess",
       }),
     });
 
@@ -212,11 +212,11 @@ describe("dashboard service", () => {
         {
           name: "reader",
           permissions: {
-            data: "none",
+            data: "noAccess",
             cards: "read",
-            presentation: "none",
-            integrations: "none",
-            roles: "none",
+            presentation: "noAccess",
+            integrations: "noAccess",
+            roles: "noAccess",
           },
         },
       ],
@@ -251,17 +251,17 @@ describe("dashboard service", () => {
     const service = createService({
       persistence,
       localUser: withLocalPermissions({
-        data: "none",
-        cards: "none",
-        presentation: "none",
-        integrations: "none",
-        roles: "none",
+        data: "noAccess",
+        cards: "noAccess",
+        presentation: "noAccess",
+        integrations: "noAccess",
+        roles: "noAccess",
       }),
     });
 
     await expect(service.read("role")).resolves.toMatchObject({
       name: "localUser",
-      permissions: { roles: "none" },
+      permissions: { roles: "noAccess" },
     });
   });
 
@@ -273,7 +273,7 @@ describe("dashboard service", () => {
         cards: "write",
         presentation: "write",
         integrations: "write",
-        roles: "none",
+        roles: "noAccess",
       }),
     });
 
@@ -296,9 +296,9 @@ describe("dashboard service", () => {
       localUser: withLocalPermissions({
         data: "write",
         cards: "write",
-        presentation: "none",
+        presentation: "noAccess",
         integrations: "write",
-        roles: "none",
+        roles: "noAccess",
       }),
     });
 
@@ -496,7 +496,7 @@ describe("integration authorization", () => {
           cards: "write",
           presentation: "write",
           integrations: "read",
-          roles: "none",
+          roles: "noAccess",
         }),
       credentials,
     });
@@ -582,8 +582,8 @@ describe("connectable integration types", () => {
           data: "write",
           cards: "write",
           presentation: "write",
-          integrations: "none",
-          roles: "none",
+          integrations: "noAccess",
+          roles: "noAccess",
         }),
       connectableTypes: ["google-calendar"],
     });

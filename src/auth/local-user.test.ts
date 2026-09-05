@@ -104,7 +104,7 @@ describe("the service's local user", () => {
 
     await expect(service.read("role")).resolves.toMatchObject({
       name: "unauthenticatedUser",
-      permissions: { data: "none", cards: "none", roles: "none" },
+      permissions: { data: "noAccess", cards: "noAccess", roles: "noAccess" },
     });
     await expect(service.read("cards")).rejects.toThrow("cards: read");
   });

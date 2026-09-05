@@ -17,7 +17,7 @@ const cardTemplateNameSchema = z
     message: "Unknown card template",
   });
 
-const permissionLevelSchema = z.enum(["none", "read", "edit", "write"]);
+const permissionLevelSchema = z.enum(["noAccess", "read", "edit", "write"]);
 
 export type PermissionLevel = z.infer<typeof permissionLevelSchema>;
 

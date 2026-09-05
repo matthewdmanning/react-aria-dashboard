@@ -118,9 +118,9 @@ Secrets never live there. A user's auth tokens are held by the credential store,
 
 A named bundle of permissions, assigned to an account. A role carries no credential. Roles live in a roles file the source imports, not in dashboard configuration: configuring them means editing that file, which takes the same access as editing source code. No mutation reaches a role.
 
-A bundle covers five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`. The levels are ranked and each implies the ones below it: `edit` changes something that already exists, and `write` also creates and deletes.
+A bundle covers five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `noAccess`, `read`, `edit`, or `write`. The levels are ranked and each implies the ones below it: `edit` changes something that already exists, and `write` also creates and deletes.
 
-Two roles ship as defaults, not as fixed names. `admin` holds `write` on `data`, `cards`, `presentation`, and `integrations`, and `read` on `roles`. `user` holds `write` on `data`, `read` on `cards`, `presentation`, and `integrations`, and `none` on `roles`.
+Two roles ship as defaults, not as fixed names. `admin` holds `write` on `data`, `cards`, `presentation`, and `integrations`, and `read` on `roles`. `user` holds `write` on `data`, `read` on `cards`, `presentation`, and `integrations`, and `noAccess` on `roles`.
 
 A role governs shared and server-owned things only. What belongs to one user — their queries, their own integration authorizations, base colour, typeset, and own presets — is theirs by structure, and no permission gates it.
 
