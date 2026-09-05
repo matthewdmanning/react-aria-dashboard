@@ -436,7 +436,11 @@ This makes D31's privacy outcome structural rather than enforced by filtering. T
 
 **The card-template assembler emits registry items.** `assemble-card-template` (D22) produces a registry item conforming to the shadcn registry item schema — `name`, `type`, `files`, `dependencies`, `registryDependencies`, and the optional install-time fields — rather than a bare `.tsx` file. This closes the gap between D22 and D24: the assembler's output and the registry's served items become the same artifact in the same shape, instead of the registry wrapping raw source after the fact.
 
-**`react-aria-components` and `@base-ui/react` leave `package.json`.** D25 made their use stale; this removes them. Pre-alpha, so they are deleted outright rather than deprecated.
+**`react-aria-components` leaves `package.json`.** D25 made its use stale; this removes it. Pre-alpha, so it is deleted outright rather than deprecated.
+
+Corrected: this decision first said `@base-ui/react` goes with it. That was wrong. `@base-ui/react` is what shadcn/ui's `base-nova` style is built on — `src/components/ui/{badge,button,separator}.tsx` import it directly — so it is shadcn's own substrate rather than a competing headless layer, and removing it would break those components. It stays.
+
+`react-aria-components` has not left yet either: the composition-tree assembler (D22) still generates imports from it and typechecks against it, so it goes once that is reworked onto the registry-item output above.
 
 **Theme schema is defined by Tailwind CSS and shadcn/ui.** The shape of a theme is not this project's invention — it is the token vocabulary those two define. What `themeSchema.settings` holds concretely is still open, pending a further decision.
 

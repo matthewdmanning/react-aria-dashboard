@@ -18,6 +18,8 @@ A card template is whole-widget in grain — a calendar, an Eisenhower plot, a w
 
 A card template displays properly formatted data and nothing more. It does not extract, remove, or reformat data.
 
+There are none at present: the five that shipped were deleted (D32) and their shadcn replacements are not written, so a dashboard renders no card today.
+
 ## Display-role key
 
 A key in a card template's schema. Display-role keys name **how a value is displayed**, not what it means in an external domain: `COL_HEADER`, `LIST_ITEMS`, and so on.
@@ -28,13 +30,13 @@ This is what lets external data reach a template without new code — a formatte
 
 A card template in use: an id, a title, a reference to a card template, and its state. A card carries no queries — those are stored with the user who supplied them.
 
-A card carries no position, no size, and no theme of its own. Placement belongs to the dashboard that references it, and appearance belongs to the theme that dashboard names. Retitling a card, editing its state, or changing its queries changes the card, never the card template. One card template backs any number of cards.
+A card carries no position, no size, and no theme of its own. Placement belongs to the dashboard that references it, and appearance belongs to the theme that dashboard names. Retitling a card or editing its state changes the card, never the card template. One card template backs any number of cards.
 
 ## State
 
 The data a card currently displays, stored already fitting its card template's schema. Rendering is a straight read with no transform.
 
-State is changed by mutations, whatever produced them — a user edit or a query result reshaped by its formatter. A card accepts manual edits to its state whatever its queries.
+State is changed by mutations, whatever produced them — a user edit or a query result reshaped by its formatter. A card accepts manual edits to its state whether or not a query also writes it.
 
 ## Query
 
@@ -102,7 +104,7 @@ A whole colour token set, in the format of `globals-example.css` — the `@theme
 
 A preset is complete and literal: every semantic-variable-to-colour pair is written out. Generation happens only at build time, at initialization or preset-apply; nothing generates token values at runtime.
 
-A role holding `cards: write` — the same bundle that may add card templates — adds presets available to everyone. A user may also add their own.
+`admin` adds presets available to everyone. A user may also add their own; their own presets are theirs by structure and no permission gates them.
 
 ## Per-user configuration
 
@@ -111,8 +113,6 @@ The preferences that belong to one user rather than to the dashboard: base colou
 A user owns appearance, expressed in the component library's own semantics — never in CSS. The server owns data and card templates; a user's appearance settings do not reach either.
 
 Secrets never live there. A user's auth tokens are held by the credential store, encrypted at rest and kept on the server host, under a key rotated every 90 days. Dashboard configuration stays shared — it holds what everyone sees — and no credential lives in it.
-
-A running dashboard serves its own wired-in card templates as a shadcn registry (`/r/registry.json`, `/r/<name>.json`), so a shadcn-aware client can discover and add them directly from that dashboard.
 
 ## Role
 

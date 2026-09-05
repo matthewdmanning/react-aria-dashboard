@@ -31,23 +31,25 @@ Seven modules:
 | `card-templates` | Card template components, paired with their schemas from `contract`. Split out on change cadence: these are added by source change, not through the service.                       |
 | `mcp`            | Tool definitions. Calls `service`.                                                                                                                                                 |
 
-Runtime dashboard data and installed themes live at a configurable path outside `src/`.
-
-Dashboard configuration is shared — it holds what every user sees. Per-user preferences (base colour, typeset) are read from each user's own `.env` file or files (D27, D33). Secrets are not kept there: account credentials are stored only as a `crypto.scrypt` hash and compared with `crypto.timingSafeEqual`, and integration tokens are encrypted at rest on the server host under a key rotated every 90 days (D28). A stored token names the key it was sealed under, so a rotation can re-encrypt without a flag day. `CredentialStore` stays the single seam every path goes through to reach a stored secret.
+Runtime dashboard data and installed themes live at a configurable path outside `src/`. Roles live in a file `contract` imports; per-user preferences live in each user's own `.env` files; secrets live in the credential store. None of the three is dashboard configuration.
 
 ## Rewrite in progress
 
 The module map above is the target cut. The rewrite lands issue by issue, so parts of `src/` do not match it yet:
 
-| Module           | State                                                 |
-| ---------------- | ----------------------------------------------------- |
-| `contract`       | Written, at `src/contract/`                           |
-| `service`        | Written, at `src/service/`                            |
-| `auth`           | Written, at `src/auth/`                               |
-| `mcp`            | Rewritten onto `service`, at `src/mcp/`; tested       |
-| `integrations`   | Not split out; lives under `src/server/integrations/` |
-| `view`           | Not renamed; lives at `src/client/`; on `service`     |
-| `card-templates` | Not split out; components live at `src/client/cards/` |
+| Module           | State                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `contract`       | Written, at `src/contract/`                                                                                                               |
+| `service`        | Written, at `src/service/`                                                                                                                |
+| `auth`           | Written, at `src/auth/`                                                                                                                   |
+| `mcp`            | Rewritten onto `service`, at `src/mcp/`; tested                                                                                           |
+| `integrations`   | Not split out; lives under `src/server/integrations/`                                                                                     |
+| `view`           | Not renamed; lives at `src/client/`; on `service`                                                                                         |
+| `card-templates` | Partly split out; the composition-tree codegen is at `src/card-templates/`, `CardView` and the template map remain at `src/client/cards/` |
+
+There are no card templates. The five that shipped were deleted (D32) and their shadcn replacements are not written, so `cardTemplateSchemas` is empty, the default configuration holds no card, the registry serves an empty index, and a running dashboard renders nothing. Their schemas were kept for tests at `src/test-support/card-template.ts`.
+
+Two further gaps between the decisions and the tree: the assembler still emits a bare `.tsx` rather than the registry item D32 calls for, and `react-aria-components` is still declared and still what that assembler generates against.
 
 Delete this section when the last module lands.
 
@@ -68,7 +70,7 @@ A dashboard declares one presentational library — shadcn/ui — once, at initi
 
 Every colour a card template names is a semantic token from that set, never a hex literal or a palette-scale utility (D26). A card template therefore has no colour of its own: changing the base colour recolours it without touching its source, so one card's source serves every user at once, each seeing their own.
 
-Base colour modifies a theme, controlling the token values generated at initialization or when a preset is applied (D27). A preset is a whole token set in the format of `globals-example.css`, never a partial override. A role holding `cards: write` adds presets for everyone; a user may add their own.
+Base colour modifies a theme, controlling the token values generated at initialization or when a preset is applied (D27). A preset is a whole token set in the format of `globals-example.css`, never a partial override. `admin` adds presets for everyone; a user may add their own, which no permission gates.
 
 A user owns appearance; the server owns data and card templates (D33). A theme's settings are a typeset — shadcn's typography system — plus the presentational fields of `components.json` (`style`, `tailwind.baseColor`, `tailwind.cssVariables`, `iconLibrary`, `rtl`, `menuColor`, `menuAccent`). That file's structural fields (`aliases`, `rsc`, `tsx`, `tailwind.config`, `tailwind.css`, `tailwind.prefix`, `registries`) stay server-owned and are unreachable through a theme.
 
@@ -95,7 +97,7 @@ The service exposes two operations: `read(scope)` returns state, and `apply(muta
 
 Mutations change cards, the dashboard, themes, and integrations. They never change roles, built-in formatters, or packages — those are source changes, unreachable through the service at any permission level. Card templates are the one exception (D22): the service can assemble one's component from a declarative composition tree, gated by a permission level like any other mutation.
 
-Every request resolves to an account, then a role, then permissions, at one enforcement point. A caller arriving with no credential resolves to full permissions if it is the local user, and to none otherwise (D35). Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
+Every request resolves to an account, then a role, then permissions, at one enforcement point. Access is governed in five categories — `data`, `cards`, `presentation`, `integrations`, `roles` — each holding `none`, `read`, `edit`, or `write`, ranked so each level implies the ones below it.
 
 `edit` changes something that already exists; `write` also creates and destroys. A role with `cards: edit` can retitle a card and change what it shows but cannot add or remove one. A mutation's category and required level both follow from its type, so a caller states only its payload and one lookup decides what the caller's bundle must hold.
 
@@ -103,7 +105,9 @@ The matrix governs shared and server-owned things only (D35). What belongs to on
 
 Two roles ship as defaults (D35): `admin` (`write` on `data`, `cards`, `presentation`, `integrations`; `read` on `roles`) and `user` (`write` on `data`, `read` on `cards`, `presentation`, and `integrations`, `none` on `roles`). Roles are configured by editing a roles file the source imports — the same access as editing source code — not through the service. They do not live in dashboard configuration.
 
-The local user resolves to full permissions; every other caller without a credential resolves to none. Proof is a token written at startup to `.dashboard/local-user-token`, restricted to the owning account — `chmod` 0600 on POSIX, `icacls` on Windows, where `chmod` grants nothing (D35). `mcp` over stdio is the local user by construction; the browser receives the token in the URL the server prints to its own stdout. Loopback is not itself proof: another OS account on the host can reach the port.
+A caller with no credential resolves to full permissions if it is the local user and to none otherwise (D35). Proof is a token written at startup to `.dashboard/local-user-token`, restricted to the owning account — `chmod` 0600 on POSIX, `icacls` on Windows, where `chmod` grants nothing. `mcp` over stdio is the local user by construction; the browser receives the token in the URL the server prints to its own stdout. Loopback is not itself proof: another OS account on the host can reach the port.
+
+Account credentials are stored only as a `crypto.scrypt` hash and compared with `crypto.timingSafeEqual`; integration tokens are encrypted at rest on the server host under a key rotated every 90 days, each naming the key it was sealed under so a rotation needs no flag day (D28). `CredentialStore` is the single seam every path goes through to reach a stored secret.
 
 `integrations` governs the integration — the service, its adapter, its query surface — which is shared. A user's own authorization to one is theirs by structure and needs no permission, the same as their queries.
 
