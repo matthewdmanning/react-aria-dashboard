@@ -1,4 +1,4 @@
-// Driver for the react-aria-dashboard MCP server. Run with tsx (see SKILL.md).
+// Driver for the agentic-dashboard MCP server. Run with tsx (see SKILL.md).
 //
 //   tsx driver.ts init  <workspaceDir> [configJsonPath]
 //   tsx driver.ts call  <workspaceDir> <toolName> [jsonArgs]

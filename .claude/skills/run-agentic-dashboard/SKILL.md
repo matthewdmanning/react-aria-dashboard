@@ -1,5 +1,5 @@
 ---
-name: run-react-aria-dashboard
+name: run-agentic-dashboard
 description: Initialize a dashboard workspace with a given configuration, start the dashboard MCP server, and drive it with tool calls (read-dashboard, add-card, edit-theme, etc.) to modify the dashboard. Use for "run the dashboard", "start the MCP server", "init a dashboard", "test the MCP tools", "screenshot/modify the dashboard via MCP".
 ---
 
@@ -9,7 +9,7 @@ This app has no GUI — it's a service (`src/service`) exposed over an MCP
 server (`src/mcp`) that a client (agent, or Claude Desktop) drives with tool
 calls. There's nothing to screenshot; the interaction surface is the MCP
 tool protocol. The driver is a small TypeScript client
-(`.claude/skills/run-react-aria-dashboard/driver.ts`) that inits a workspace,
+(`.claude/skills/run-agentic-dashboard/driver.ts`) that inits a workspace,
 spawns the real server (`src/mcp/index.ts`) over stdio, and sends it tool
 calls — the same path a real MCP-connected agent takes.
 
@@ -32,7 +32,7 @@ All commands run from the repo root with `npx tsx`.
 **1. Init a workspace**, optionally with a custom configuration:
 
 ```bash
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts init <workspaceDir> [configJsonPath]
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts init <workspaceDir> [configJsonPath]
 ```
 
 Writes `<workspaceDir>/.dashboard/dashboard.json` (validated against the
@@ -46,7 +46,7 @@ a full `DashboardConfiguration` object — see
 **2. List available tools:**
 
 ```bash
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts list <workspaceDir>
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts list <workspaceDir>
 ```
 
 Spawns the MCP server against that workspace and returns the tool names
@@ -59,14 +59,14 @@ Spawns the MCP server against that workspace and returns the tool names
 **3. Call one tool** (one-shot — spawns, calls, closes):
 
 ```bash
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts call <workspaceDir> <toolName> '<jsonArgs>'
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts call <workspaceDir> <toolName> '<jsonArgs>'
 ```
 
 Example:
 
 ```bash
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts call ./ws read-dashboard '{"scope":"all"}'
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts call ./ws add-card '{"card":{"id":"note1","title":"Note","template":"message","state":{"message":"hi"},"queries":[]}}'
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts call ./ws read-dashboard '{"scope":"all"}'
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts call ./ws add-card '{"card":{"id":"note1","title":"Note","template":"message","state":{"message":"hi"},"queries":[]}}'
 ```
 
 **4. Accept a stream of prompts (REPL)** — for a subagent driving the
@@ -74,7 +74,7 @@ dashboard from a series of instructions, one JSON command per line on
 stdin, one JSON result per line on stdout:
 
 ```bash
-npx tsx .claude/skills/run-react-aria-dashboard/driver.ts repl <workspaceDir>
+npx tsx .claude/skills/run-agentic-dashboard/driver.ts repl <workspaceDir>
 ```
 
 Input line shape: `{"tool": "<toolName>", "args": {...}}`. EOF (Ctrl-D)

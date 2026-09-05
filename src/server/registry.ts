@@ -16,9 +16,9 @@ import {
  * in-flight `__assemble-*` files from a concurrent assembly.
  */
 
-const REGISTRY_NAME = "react-aria-dashboard";
+const REGISTRY_NAME = "agentic-dashboard";
 const REGISTRY_HOMEPAGE =
-  "https://github.com/matthewdmanning/react-aria-dashboard";
+  "https://github.com/matthewdmanning/agentic-dashboard";
 const cardTemplatesDir = join(process.cwd(), "src", "client", "cards");
 
 const SHADCN_UI_IMPORT_PATTERN = /@\/components\/ui\/([a-z-]+)/g;
